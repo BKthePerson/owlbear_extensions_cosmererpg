@@ -103,26 +103,30 @@ async function write(update: Update): Promise<void> {
 
 const isGM = (): boolean => me.role === "GM";
 
-// UI-level rule: the GM acts for everyone, players only for PCs they own.
-// The SDK does not enforce this; it is a table convention.
-const canAct = (c: Combatant): boolean => isGM() || (c.side === "PC" && c.ownerId === me.id);
+// UI-level rules. The SDK does not enforce them; they are a table convention.
+// - Turn order (state markers, Next, Clear fight, add and remove) is GM only.
+// - A player can only switch fast or slow for PCs they own. The GM can do it for anyone.
+const canChooseSpeed = (c: Combatant): boolean =>
+  isGM() || (c.side === "PC" && c.ownerId === me.id);
 
 function renderRow(entry: Entry): HTMLElement {
   const { combatant: c, speed } = entry;
   const state = stateOf(entry);
-  const allowed = sceneReady && canAct(c);
+  const canSpeed = sceneReady && canChooseSpeed(c);
+  const gmControls = sceneReady && isGM();
 
   const stateBtn = h("button", {
     className: "state-btn",
     text: STATE_SYMBOL[state],
-    title: `${STATE_LABEL[state]}. Click to change.`,
+    title: gmControls ? `${STATE_LABEL[state]}. Click to change.` : STATE_LABEL[state],
     label: `${c.name}: ${STATE_LABEL[state]}`,
     type: "button",
-    disabled: !allowed,
+    disabled: !gmControls,
   });
-  stateBtn.addEventListener("click", () =>
-    write(setTurnState(tracker, c.id, speed, NEXT_STATE[state])),
-  );
+  stateBtn.addEventListener("click", () => {
+    if (!isGM()) return;
+    void write(setTurnState(tracker, c.id, speed, NEXT_STATE[state]));
+  });
 
   const name = h("span", { className: "name", text: c.name });
   if (c.boss) name.append(h("span", { className: "tag", text: "Boss" }));
@@ -136,9 +140,12 @@ function renderRow(entry: Entry): HTMLElement {
       text: speed === "fast" ? "Fast" : "Slow",
       title: `Switch to ${other} turn (only before this turn starts)`,
       type: "button",
-      disabled: !allowed || state !== "waiting",
+      disabled: !canSpeed || state !== "waiting",
     });
-    speedBtn.addEventListener("click", () => write(setSpeed(tracker, c.id, other)));
+    speedBtn.addEventListener("click", () => {
+      if (!canChooseSpeed(c)) return;
+      void write(setSpeed(tracker, c.id, other));
+    });
     controls.append(speedBtn);
   }
 
@@ -152,7 +159,9 @@ function renderRow(entry: Entry): HTMLElement {
       label: `Remove ${c.name}`,
       type: "button",
     });
-    removeBtn.addEventListener("click", () => write(removeCombatant(c.id)));
+    removeBtn.addEventListener("click", () => {
+      if (isGM()) void write(removeCombatant(c.id));
+    });
     removeCell.append(removeBtn);
   }
 
@@ -212,10 +221,13 @@ function render(): void {
 }
 
 function wireControls(): void {
-  byId("next-btn").addEventListener("click", () => write(next(tracker)));
+  byId("next-btn").addEventListener("click", () => {
+    if (isGM()) void write(next(tracker));
+  });
 
   const clearBtn = byId<HTMLButtonElement>("clear-btn");
   clearBtn.addEventListener("click", () => {
+    if (!isGM()) return;
     if (!clearArmed) {
       clearArmed = true;
       clearBtn.textContent = "Click again to clear";
@@ -237,6 +249,7 @@ function wireControls(): void {
 
   byId<HTMLFormElement>("add-form").addEventListener("submit", (event) => {
     event.preventDefault();
+    if (!isGM()) return;
     const nameInput = byId<HTMLInputElement>("add-name");
     const name = nameInput.value.trim();
     if (!name) return;

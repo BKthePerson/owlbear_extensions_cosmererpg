@@ -62,6 +62,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   border: 1px solid #6a70a0;
   font-size: 14px; line-height: 1;
 }
+.state-btn:disabled { opacity: 1; cursor: default; }
 .row.active .state-btn { background: var(--accent); color: #111; border: 0; }
 .row.done .state-btn { background: #4b7a5a; color: #fff; border: 0; }
 
