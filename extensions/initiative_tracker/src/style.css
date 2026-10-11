@@ -138,3 +138,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 .form-row select { min-width: 0; }
 #add-owner { flex: 1; }
 .check { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+
+.help { margin: 12px 0 0; font-size: 12px; }
+.help a { color: var(--muted); }

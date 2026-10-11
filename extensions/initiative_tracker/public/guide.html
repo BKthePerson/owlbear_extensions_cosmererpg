@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Initiative tracker guide</title>
+    <link rel="stylesheet" href="site.css" />
+  </head>
+  <body>
+    <main>
+      <p><a href="index.html">&larr; Back to install</a></p>
+      <h1>Initiative tracker guide</h1>
+      <p class="lede">How the tracker works for the GM and for players.</p>
+      <nav class="toc">
+        <a href="#turns">How turns work</a>
+        <a href="#players">For players</a>
+        <a href="#gm">For the GM</a>
+        <a href="#limits">Good to know</a>
+      </nav>
+
+      <h2 id="turns">How turns work</h2>
+      <p>A round has four bands, played in this order:</p>
+      <ol>
+        <li>Fast PCs</li>
+        <li>Fast NPCs</li>
+        <li>Slow PCs</li>
+        <li>Slow NPCs</li>
+      </ol>
+      <p>The band that is up has a purple outline and a "Now" tag. Everyone in that band acts, in any order they like. Each fast turn has two actions (two arrows). Each slow turn has three (three arrows).</p>
+      <p>Bosses take both a fast turn and a slow turn, so a boss appears in both the fast NPC and slow NPC bands, and its speed cannot be changed. Empty bands are skipped.</p>
+
+      <h2 id="players">For players</h2>
+      <h3>Choose fast or slow</h3>
+      <p>Your character's row has a fast/slow toggle. Set it before the round starts. It locks once the character is marked done, or if the character is Down.</p>
+      <h3>Mark your turn done</h3>
+      <p>When your character has finished acting, click the circle on your row. It turns into a check. Click again to undo it. You can only do this for characters you own. They are marked "(you)".</p>
+      <h3>What you cannot do</h3>
+      <p>Advancing bands, going back, adding or removing combatants, and changing status are GM controls. Those buttons are hidden for players, and other players' rows are greyed out.</p>
+
+      <h2 id="gm">For the GM</h2>
+      <h3>Build the fight</h3>
+      <dl>
+        <dt>Add all players</dt>
+        <dd>One click adds a PC for each player in the room who does not have one yet. The button shows how many it will add. It is disabled when everyone already has a PC.</dd>
+        <dt>Add combatant</dt>
+        <dd>Enter a name, pick PC or NPC, and for a PC pick the owning player. A blank name uses the owner's player name. Tick Boss for a boss NPC.</dd>
+      </dl>
+      <h3>Run the round</h3>
+      <dl>
+        <dt>Start round / Next band / Next round</dt>
+        <dd>The main button changes with where you are. Moving past the last band starts the next round and clears every Done mark. Statuses stay.</dd>
+        <dt>Back</dt>
+        <dd>Goes back one band. It does not clear Done marks, so a misclick is cheap to undo.</dd>
+        <dt>Done</dt>
+        <dd>Click the circle on any row to mark that combatant as having acted. You can do this for NPCs and for players who forget.</dd>
+        <dt>Clear fight</dt>
+        <dd>Click once to arm (the button turns red), click again to remove every combatant and reset to round 1.</dd>
+      </dl>
+      <h3>The ⋯ menu</h3>
+      <p>Each row has a ⋯ menu with four choices:</p>
+      <ul>
+        <li><strong>Active</strong>: in the fight and taking turns.</li>
+        <li><strong>Down</strong>: incapacitated. The row shows a red arrow icon and cannot be marked done or change speed. They stay in the order so you can bring them back.</li>
+        <li><strong>Dead</strong>: removed from the order and listed under "Out of the fight". Set them back to Active to return them.</li>
+        <li><strong>Remove</strong>: deletes the combatant entirely.</li>
+      </ul>
+
+      <h2 id="limits">Good to know</h2>
+      <ul>
+        <li>Everything is stored in the Owlbear scene, so the tracker is shared live and survives reloads. A new scene starts empty.</li>
+        <li>Permissions are enforced by the interface, not by Owlbear. A determined player could bypass them. At the table this is the same trust as a paper sheet.</li>
+        <li>Only players currently connected to the room appear in the owner list. If someone is offline, add them once they join, or use Add all players later.</li>
+        <li>Combatants are not linked to map tokens yet.</li>
+        <li>Testing alone: two incognito windows in the same Chrome session share one Owlbear identity, so both will act as the same player. Use two different browsers or profiles to test a player view.</li>
+      </ul>
+    </main>
+  </body>
+</html>
