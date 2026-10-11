@@ -1,0 +1,14 @@
+{
+  "name": "extensions_owlbear",
+  "version": "1.0.0",
+  "description": "Extensions for owlbear rodeo for the cosmere RPG",
+  "license": "MIT",
+  "author": "Brandon Klein",
+  "type": "commonjs",
+  "main": "index.js",
+  "private": true,
+  "workspaces":["extensions/*"],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

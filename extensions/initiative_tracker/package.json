@@ -1,0 +1,15 @@
+{
+  "name": "initiative_tracker",
+  "version": "1.0.0",
+  "description": "An initiative tracker for the cosmere rpg",
+  "keywords": [
+    "cosmererpg"
+  ],
+  "license": "MIT",
+  "author": "Brandon Klein",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

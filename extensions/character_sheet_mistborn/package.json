@@ -1,0 +1,15 @@
+{
+  "name": "character_sheet_mistborn",
+  "version": "1.0.0",
+  "description": "An owlbear extension for mistborn character sheets",
+  "keywords": [
+    "cosmererpg"
+  ],
+  "license": "MIT",
+  "author": "Brandon Klein",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
