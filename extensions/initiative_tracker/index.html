@@ -1,1 +1,47 @@
-<script type="module" src="/src/main.ts"></script>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cosmere initiative tracker</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <h1>Permissions spike</h1>
+      <p id="who">Connecting to Owlbear...</p>
+      <p class="hint">
+        Open this in a GM window and a player window. Press each button in both,
+        and check that the other window sees the value change.
+      </p>
+
+      <section>
+        <h2>Scene metadata</h2>
+        <button id="scene-btn" type="button">Write</button>
+        <p>Value: <span id="scene-value">nothing yet</span></p>
+      </section>
+
+      <section>
+        <h2>Room metadata</h2>
+        <button id="room-btn" type="button">Write</button>
+        <p>Value: <span id="room-value">nothing yet</span></p>
+      </section>
+
+      <section>
+        <h2>Broadcast</h2>
+        <button id="bcast-btn" type="button">Send to everyone</button>
+      </section>
+
+      <section>
+        <h2>Room permissions for this player</h2>
+        <p id="perms" class="mono">...</p>
+      </section>
+
+      <section>
+        <h2>Log</h2>
+        <ul id="log"></ul>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
