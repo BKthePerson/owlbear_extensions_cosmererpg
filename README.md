@@ -1,0 +1,1 @@
+NOTE: 2 moderate vulnerabilities in the owlbear SDK with no fix available. Going ahead for now as of OCT 2026
