@@ -68,6 +68,14 @@ One-time setup: in the repo, go to Settings, Pages, and set the source to **GitH
 
 To change the landing page, edit `extensions/initiative_tracker/public/index.html`. The popover lives at `popover.html`, so the site root is free for any page.
 
+### Changing stored data
+
+The tracker keeps its state in scene metadata, and an open popover keeps running the code it loaded. So:
+
+- Only add optional fields. Never rename or retype a stored field.
+- Read stored data tolerantly: a missing or malformed field falls back to a default. Write unknown fields back untouched, so older code does not erase what a newer version added.
+- A push to `main` deploys at once, but open popovers keep the old code. Do not push a storage change during a game, and reload Owlbear after a deploy.
+
 ## Known issues
 
 2 moderate vulnerabilities reported in the Owlbear SDK dependency, with no fix available as of October 2026.

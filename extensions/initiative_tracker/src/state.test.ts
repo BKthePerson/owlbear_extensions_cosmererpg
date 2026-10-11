@@ -2,12 +2,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   META_KEY,
+  NS,
   addCombatant,
   addPlayerCombatants,
   allEntries,
   combatantKey,
   emptyTracker,
   canGoBack,
+  canSetSpeed,
+  combatantRecord,
   deadCombatants,
   next,
   nextAction,
@@ -24,17 +27,29 @@ import {
   type Update,
 } from "./state.ts";
 
-// Apply an Update to a metadata object the way Owlbear would, then re-parse.
-function apply(tracker: Tracker, update: Update): Tracker {
-  const metadata: Record<string, unknown> = {
-    [META_KEY]: { round: tracker.round, band: tracker.band },
-  };
-  for (const c of tracker.combatants) metadata[combatantKey(c.id)] = c;
+type Metadata = Record<string, unknown>;
+
+// Apply an Update to raw metadata the way Owlbear would: top-level keys are
+// replaced whole, and an undefined value deletes the key.
+function applyRaw(metadata: Metadata, update: Update): Metadata {
+  const result = { ...metadata };
   for (const [key, value] of Object.entries(update)) {
-    if (value === undefined) delete metadata[key];
-    else metadata[key] = value;
+    if (value === undefined) delete result[key];
+    else result[key] = value;
   }
-  return parseTracker(metadata);
+  return result;
+}
+
+// The metadata a tracker would be stored as.
+function toMetadata(tracker: Tracker): Metadata {
+  const metadata: Metadata = { [META_KEY]: { v: 1, round: tracker.round, band: tracker.band } };
+  for (const c of tracker.combatants) metadata[combatantKey(c.id)] = combatantRecord(c);
+  return metadata;
+}
+
+// Store the tracker, apply the Update to the stored form, then re-parse.
+function apply(tracker: Tracker, update: Update): Tracker {
+  return parseTracker(applyRaw(toMetadata(tracker), update));
 }
 
 function build(...inputs: NewCombatant[]): Tracker {
@@ -48,7 +63,7 @@ const npc = (id: string, boss = false): NewCombatant => ({ id, name: id, side: "
 
 const stateById = (t: Tracker, id: string, speed: "fast" | "slow") => {
   const entry = allEntries(t).find((e) => e.combatant.id === id && e.speed === speed);
-  return entry ? stateOf(entry) : undefined;
+  return entry ? stateOf(entry, t.round) : undefined;
 };
 
 test("Next starts at the first occupied band, then walks the bands in order", () => {
@@ -158,7 +173,7 @@ test("old 'active' states load as waiting, and malformed entries are ignored", (
     [combatantKey("y")]: { id: 5 },
   });
   assert.equal(t.combatants.length, 1);
-  assert.equal(t.combatants[0]?.fast, "waiting");
+  assert.equal(stateById(t, "x", "fast"), "waiting");
 });
 
 test("owner id and name are kept, and missing ones load as null", () => {
@@ -272,4 +287,109 @@ test("quick-add skips players who already own a combatant, including a dead one"
 
 test("quick-add with nobody to add does nothing", () => {
   assert.deepEqual(addPlayerCombatants(build(), []), {});
+});
+
+const legacyRecord = {
+  id: "x", name: "x", side: "PC", boss: false, speed: "fast", ownerId: null, ownerName: null, order: 1, status: "active",
+};
+
+test("a player marking Done and the GM starting a new round, in either order, leave the new round Waiting", () => {
+  let t = build(pc("a"), npc("goon"));
+  t = apply(t, next(t));
+  t = apply(t, next(t));
+  assert.equal(t.band, 1);
+
+  const gmNext = next(t);
+  const playerDone = setTurnState(t, "goon", "fast", "done");
+  for (const order of [[gmNext, playerDone], [playerDone, gmNext]]) {
+    let result = t;
+    for (const update of order) result = apply(result, update);
+    assert.equal(result.round, 2);
+    assert.equal(stateById(result, "goon", "fast"), "waiting");
+  }
+});
+
+test("Next at the end of a round writes only the meta, with the format version", () => {
+  let t = build(pc("a"));
+  t = apply(t, next(t));
+  t = apply(t, setTurnState(t, "a", "fast", "done"));
+  const update = next(t);
+  assert.deepEqual(Object.keys(update), [META_KEY]);
+  assert.deepEqual(update[META_KEY], { v: 1, round: 2, band: 0 });
+});
+
+test("unknown stored fields survive writes, flat, in the stored record", () => {
+  const raw: Metadata = {
+    [combatantKey("a")]: { ...legacyRecord, id: "a", name: "a", tokenIds: ["t1"] },
+  };
+  const t = parseTracker(raw);
+  assert.deepEqual(t.combatants[0]?.extra, { tokenIds: ["t1"] });
+  const updates = [
+    setTurnState(t, "a", "fast", "done"),
+    setSpeed(t, "a", "slow"),
+    setStatus(t, "a", "down"),
+  ];
+  for (const update of updates) {
+    const stored = applyRaw(raw, update)[combatantKey("a")] as Record<string, unknown>;
+    assert.deepEqual(stored.tokenIds, ["t1"]);
+    assert.equal("extra" in stored, false);
+  }
+});
+
+test("a legacy fast/slow record reads as Waiting and loses those keys on the next write", () => {
+  const raw: Metadata = { [combatantKey("x")]: { ...legacyRecord, fast: "done", slow: "done", tokenIds: ["t1"] } };
+  const t = parseTracker(raw);
+  assert.equal(stateById(t, "x", "fast"), "waiting");
+  assert.deepEqual(t.combatants[0]?.extra, { tokenIds: ["t1"] });
+  const stored = applyRaw(raw, setStatus(t, "x", "down"))[combatantKey("x")] as Record<string, unknown>;
+  assert.equal("fast" in stored, false);
+  assert.equal("slow" in stored, false);
+  assert.deepEqual(stored.tokenIds, ["t1"]);
+});
+
+test("Clear fight deletes malformed and unrecognised keys in the namespace only", () => {
+  const raw: Metadata = {
+    [META_KEY]: { v: 1, round: 3, band: 2 },
+    [combatantKey("x")]: legacyRecord,
+    [combatantKey("bad")]: { id: 5 },
+    [`${NS}/future`]: { anything: true },
+    [`${NS}-other/c/y`]: { keep: true },
+    "other/key": 1,
+  };
+  const result = applyRaw(raw, resetFight(parseTracker(raw)));
+  assert.deepEqual(result[META_KEY], { v: 1, round: 1, band: null });
+  assert.deepEqual(Object.keys(result).sort(), [META_KEY, `${NS}-other/c/y`, "other/key"].sort());
+});
+
+test("a switch into a band that is already over is blocked", () => {
+  let t = build(pc("fastpc"), pc("slowpc"), npc("goon"));
+  t = apply(t, setSpeed(t, "slowpc", "slow"));
+  t = apply(t, next(t));
+  t = apply(t, next(t));
+  t = apply(t, next(t));
+  assert.equal(t.band, 2);
+
+  assert.equal(canSetSpeed(t, "slowpc", "fast"), false);
+  assert.deepEqual(setSpeed(t, "slowpc", "fast"), {});
+  // Switching to the lane that is still ahead, or the current band, is fine.
+  assert.equal(canSetSpeed(t, "fastpc", "slow"), true);
+  assert.equal(canSetSpeed(t, "goon", "slow"), true);
+});
+
+test("a fast PC can still switch to slow during the Fast PC band", () => {
+  let t = build(pc("a"));
+  t = apply(t, next(t));
+  assert.equal(t.band, 0);
+  assert.equal(canSetSpeed(t, "a", "slow"), true);
+  t = apply(t, setSpeed(t, "a", "slow"));
+  assert.equal(t.combatants[0]?.speed, "slow");
+});
+
+test("before the round starts a combatant can switch both ways", () => {
+  let t = build(pc("a"));
+  assert.equal(t.band, null);
+  t = apply(t, setSpeed(t, "a", "slow"));
+  assert.equal(t.combatants[0]?.speed, "slow");
+  t = apply(t, setSpeed(t, "a", "fast"));
+  assert.equal(t.combatants[0]?.speed, "fast");
 });

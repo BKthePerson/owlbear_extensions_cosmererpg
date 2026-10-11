@@ -5,6 +5,7 @@ import {
   addCombatant,
   addPlayerCombatants,
   canGoBack,
+  canSetSpeed,
   deadCombatants,
   emptyTracker,
   entriesInLane,
@@ -188,7 +189,7 @@ function renderNameCell(c: Combatant, extraTag?: string): HTMLElement {
 
 function renderRow(entry: Entry): HTMLElement {
   const { combatant: c, speed } = entry;
-  const state = stateOf(entry);
+  const state = stateOf(entry, tracker.round);
   const isActive = c.status === "active";
   const controllable = sceneReady && canControl(c) && isActive;
 
@@ -217,9 +218,9 @@ function renderRow(entry: Entry): HTMLElement {
     const speedBtn = h("button", {
       className: "speed-btn secondary",
       text: speed === "fast" ? "Fast" : "Slow",
-      title: `Switch to ${other} turn (only before this turn starts)`,
+      title: `Switch to ${other} turn (not after this turn is done or the ${other} band has passed)`,
       type: "button",
-      disabled: !controllable || state !== "waiting",
+      disabled: !controllable || !canSetSpeed(tracker, c.id, other),
     });
     speedBtn.addEventListener("click", () => {
       if (!canControl(c)) return;

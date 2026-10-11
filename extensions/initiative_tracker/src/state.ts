@@ -1,10 +1,16 @@
 // Tracker rules, kept free of any Owlbear or DOM code so they can be tested alone.
 //
 // Storage layout in scene metadata:
-//   <NS>/meta        -> { round: number, band: number | null }
-//   <NS>/c/<id>      -> one Combatant per key
+//   <NS>/meta        -> { v: 1, round: number, band: number | null }
+//   <NS>/c/<id>      -> one flat combatant record per key: the Combatant fields,
+//                       with fastDone / slowDone as the round number that turn
+//                       was marked Done in (or null), plus any fields this
+//                       version does not know, carried through untouched
 // One key per combatant means two people editing different combatants at the
-// same moment do not overwrite each other.
+// same moment do not overwrite each other. A turn is Done only while its stamp
+// equals the current round, so starting a new round is a single meta write and
+// never rewrites combatants. Records from the earlier version (fast / slow set
+// to "done") read as Waiting and lose those two keys on their next write.
 //
 // A "band" is one of the four phases of a round (Handbook p.317). Players may
 // act in any order inside the current band, so the tracker highlights the band
@@ -12,6 +18,7 @@
 
 export const NS = "com.brandonklein.cosmere-initiative";
 export const META_KEY = `${NS}/meta`;
+const NS_PREFIX = `${NS}/`;
 const COMBATANT_PREFIX = `${NS}/c/`;
 
 export type Side = "PC" | "NPC";
@@ -45,15 +52,17 @@ export interface Combatant {
   ownerId: string | null; // Owlbear player id allowed to control this PC
   ownerName: string | null; // player's name when assigned; fallback if they are not in the room
   order: number; // creation order, used as the tiebreak inside a lane
-  fast: TurnState;
-  slow: TurnState;
+  fastDone: number | null; // round in which the fast turn was marked Done
+  slowDone: number | null; // round in which the slow turn was marked Done
   status: Status;
+  extra: Record<string, unknown>; // stored fields this version does not know, written back as they were
 }
 
 export interface Tracker {
   round: number;
   band: number | null; // index into LANES, or null before the round has started
   combatants: Combatant[];
+  keys: string[]; // every metadata key in our namespace, so Clear fight can delete junk too
 }
 
 // One turn a combatant takes this round. Bosses have two, everyone else one.
@@ -74,21 +83,26 @@ export interface NewCombatant {
   ownerName: string | null;
 }
 
-export const emptyTracker = (): Tracker => ({ round: 1, band: null, combatants: [] });
+export const emptyTracker = (): Tracker => ({ round: 1, band: null, combatants: [], keys: [] });
 
 export const combatantKey = (id: string): string => `${COMBATANT_PREFIX}${id}`;
 
 const isSide = (v: unknown): v is Side => v === "PC" || v === "NPC";
 const isSpeed = (v: unknown): v is Speed => v === "fast" || v === "slow";
 
-// Anything other than "done" counts as waiting, which also tolerates data from
-// the earlier version that stored an "active" state.
-const toTurnState = (v: unknown): TurnState => (v === "done" ? "done" : "waiting");
+const toStamp = (v: unknown): number | null => (typeof v === "number" ? v : null);
 const toStatus = (v: unknown): Status => (v === "down" || v === "dead" ? v : "active");
+
+// Stored fields we read ourselves. fast and slow are the retired Done flags:
+// dropped here so they never end up in extra and get written back.
+const KNOWN_FIELDS = new Set([
+  "id", "name", "side", "boss", "speed", "ownerId", "ownerName", "order",
+  "fastDone", "slowDone", "status", "fast", "slow",
+]);
 
 function parseCombatant(value: unknown): Combatant | null {
   if (typeof value !== "object" || value === null) return null;
-  const { id, name, side, boss, speed, ownerId, ownerName, order, fast, slow, status } = value as Record<
+  const { id, name, side, boss, speed, ownerId, ownerName, order, fastDone, slowDone, status } = value as Record<
     string,
     unknown
   >;
@@ -111,9 +125,10 @@ function parseCombatant(value: unknown): Combatant | null {
     ownerId: typeof ownerId === "string" ? ownerId : null,
     ownerName: typeof ownerName === "string" ? ownerName : null,
     order,
-    fast: toTurnState(fast),
-    slow: toTurnState(slow),
+    fastDone: toStamp(fastDone),
+    slowDone: toStamp(slowDone),
     status: toStatus(status),
+    extra: Object.fromEntries(Object.entries(value).filter(([key]) => !KNOWN_FIELDS.has(key))),
   };
 }
 
@@ -133,11 +148,15 @@ export function parseTracker(metadata: Record<string, unknown>): Tracker {
     if (parsed) combatants.push(parsed);
   }
   combatants.sort((a, b) => a.order - b.order);
-  return { round, band, combatants };
+  const keys = Object.keys(metadata).filter((key) => key.startsWith(NS_PREFIX));
+  return { round, band, combatants, keys };
 }
 
-export const stateOf = (entry: Entry): TurnState =>
-  entry.speed === "fast" ? entry.combatant.fast : entry.combatant.slow;
+// Done only while the stamp is this round's number; older stamps mean Waiting.
+export const stateOf = (entry: Entry, round: number): TurnState =>
+  (entry.speed === "fast" ? entry.combatant.fastDone : entry.combatant.slowDone) === round
+    ? "done"
+    : "waiting";
 
 const bandOf = (entry: Entry): number =>
   LANES.findIndex((l) => l.side === entry.combatant.side && l.speed === entry.speed);
@@ -173,14 +192,21 @@ function occupiedBands(tracker: Tracker): boolean[] {
   return occupied;
 }
 
+// The stored form of a combatant: one flat object, unknown fields first so the
+// fields we know always win.
+export function combatantRecord(c: Combatant): Record<string, unknown> {
+  const { extra, ...known } = c;
+  return { ...extra, ...known };
+}
+
 function toUpdate(changed: Combatant[]): Update {
   const update: Update = {};
-  for (const c of changed) update[combatantKey(c.id)] = c;
+  for (const c of changed) update[combatantKey(c.id)] = combatantRecord(c);
   return update;
 }
 
 const metaUpdate = (round: number, band: number | null): Update => ({
-  [META_KEY]: { round, band },
+  [META_KEY]: { v: 1, round, band },
 });
 
 export function addCombatant(tracker: Tracker, input: NewCombatant): Update {
@@ -189,9 +215,10 @@ export function addCombatant(tracker: Tracker, input: NewCombatant): Update {
     ...input,
     speed: "fast",
     order,
-    fast: "waiting",
-    slow: "waiting",
+    fastDone: null,
+    slowDone: null,
     status: "active",
+    extra: {},
   };
   return toUpdate([combatant]);
 }
@@ -221,9 +248,10 @@ export function addPlayerCombatants(tracker: Tracker, players: PlayerToAdd[]): U
       ownerId: player.playerId,
       ownerName: player.playerName || null,
       order,
-      fast: "waiting",
-      slow: "waiting",
+      fastDone: null,
+      slowDone: null,
       status: "active",
+      extra: {},
     });
   }
   return toUpdate(added);
@@ -231,19 +259,28 @@ export function addPlayerCombatants(tracker: Tracker, players: PlayerToAdd[]): U
 
 export const removeCombatant = (id: string): Update => ({ [combatantKey(id)]: undefined });
 
-// New fight: drop everyone and go back to round 1, before the first band.
+// New fight: go back to round 1, before the first band, and delete every key in
+// our namespace, including malformed ones and ones from a newer version.
 export function resetFight(tracker: Tracker): Update {
   const update: Update = metaUpdate(1, null);
-  for (const c of tracker.combatants) update[combatantKey(c.id)] = undefined;
+  for (const key of tracker.keys) if (key !== META_KEY) update[key] = undefined;
   return update;
 }
 
-// Switch fast/slow. Only allowed before this turn is marked Done, and never for bosses.
+// Whether a combatant may switch fast/slow: only before this turn is marked Done,
+// never for bosses, and never into a band that is already over.
+export function canSetSpeed(tracker: Tracker, id: string, speed: Speed): boolean {
+  const c = tracker.combatants.find((x) => x.id === id);
+  if (!c || c.boss || c.status !== "active" || c.speed === speed) return false;
+  if (stateOf({ combatant: c, speed: c.speed }, tracker.round) !== "waiting") return false;
+  const target = LANES.findIndex((l) => l.side === c.side && l.speed === speed);
+  return tracker.band === null || target >= tracker.band;
+}
+
 export function setSpeed(tracker: Tracker, id: string, speed: Speed): Update {
   const c = tracker.combatants.find((x) => x.id === id);
-  if (!c || c.boss || c.status !== "active" || c.speed === speed) return {};
-  if (stateOf({ combatant: c, speed: c.speed }) !== "waiting") return {};
-  return toUpdate([{ ...c, speed, fast: "waiting", slow: "waiting" }]);
+  if (!c || !canSetSpeed(tracker, id, speed)) return {};
+  return toUpdate([{ ...c, speed, fastDone: null, slowDone: null }]);
 }
 
 // GM marks one turn Done or puts it back to Waiting.
@@ -256,17 +293,18 @@ export function setTurnState(
   const c = tracker.combatants.find((x) => x.id === id);
   if (!c || c.status !== "active") return {};
   if (!allEntries(tracker).some((e) => e.combatant.id === id && e.speed === speed)) return {};
-  return toUpdate([speed === "fast" ? { ...c, fast: state } : { ...c, slow: state }]);
+  const stamp = state === "done" ? tracker.round : null;
+  return toUpdate([speed === "fast" ? { ...c, fastDone: stamp } : { ...c, slowDone: stamp }]);
 }
 
-// GM sets a combatant Active, Down or Dead. Done marks and fast/slow are kept.
+// GM sets a combatant Active, Down or Dead. Done stamps and fast/slow are kept.
 export function setStatus(tracker: Tracker, id: string, status: Status): Update {
   const c = tracker.combatants.find((x) => x.id === id);
   if (!c || c.status === status) return {};
   return toUpdate([{ ...c, status }]);
 }
 
-// Back goes to the previous occupied band. It never touches Done marks and never
+// Back goes to the previous occupied band. It never touches Done stamps and never
 // crosses into the previous round.
 export function canGoBack(tracker: Tracker): boolean {
   if (tracker.band === null) return false;
@@ -293,7 +331,8 @@ export function nextAction(tracker: Tracker): NextAction {
 }
 
 // Move to the next band that has anyone in it. After the last band, start a new
-// round: everyone goes back to Waiting and the first occupied band is current.
+// round: only the meta is written, and every Done stamp from the old round stops
+// counting, so everyone is Waiting again and the first occupied band is current.
 export function next(tracker: Tracker): Update {
   const occupied = occupiedBands(tracker);
   const first = occupied.indexOf(true);
@@ -304,8 +343,5 @@ export function next(tracker: Tracker): Update {
   const later = occupied.findIndex((isOccupied, i) => isOccupied && i > (tracker.band ?? -1));
   if (later !== -1) return metaUpdate(tracker.round, later);
 
-  const reset = tracker.combatants
-    .filter((c) => c.fast !== "waiting" || c.slow !== "waiting")
-    .map((c): Combatant => ({ ...c, fast: "waiting", slow: "waiting" }));
-  return { ...toUpdate(reset), ...metaUpdate(tracker.round + 1, first) };
+  return metaUpdate(tracker.round + 1, first);
 }
