@@ -1,28 +1,48 @@
 import OBR from "@owlbear-rodeo/sdk";
-
-// Permissions spike. Question being answered: can players, as well as the GM,
-// write to shared state and see each other's writes? Scene metadata, room
-// metadata and broadcast messages are the three candidate channels.
-
-const NS = "com.brandonklein.cosmere-initiative";
-const KEY = `${NS}/spike`;
-const CHANNEL = `${NS}/ping`;
-
-interface Stamp {
-  by: string;
-  role: string;
-  n: number;
-  at: string;
-}
+import {
+  LANES,
+  addCombatant,
+  allEntries,
+  entriesInLane,
+  next,
+  parseTracker,
+  removeCombatant,
+  resetFight,
+  setSpeed,
+  setTurnState,
+  stateOf,
+  type Combatant,
+  type Entry,
+  type Side,
+  type TurnState,
+  type Tracker,
+  type Update,
+} from "./state.ts";
 
 type Role = "GM" | "PLAYER";
+interface PartyPlayer {
+  id: string;
+  name: string;
+}
 
-const me: { id: string; name: string; role: Role } = {
-  id: "",
-  name: "",
-  role: "PLAYER",
+const me: { id: string; role: Role } = { id: "", role: "PLAYER" };
+let tracker: Tracker = { round: 1, combatants: [] };
+let sceneReady = false;
+let partyPlayers: PartyPlayer[] = [];
+let clearArmed = false;
+let clearTimer: ReturnType<typeof setTimeout> | undefined;
+
+const STATE_SYMBOL: Record<TurnState, string> = { waiting: "○", active: "▶", done: "✓" };
+const STATE_LABEL: Record<TurnState, string> = {
+  waiting: "Waiting",
+  active: "Active",
+  done: "Done",
 };
-let counter = 0;
+const NEXT_STATE: Record<TurnState, TurnState> = {
+  waiting: "active",
+  active: "done",
+  done: "waiting",
+};
 
 function byId<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -30,31 +50,30 @@ function byId<T extends HTMLElement>(id: string): T {
   return node as T;
 }
 
-function isStamp(value: unknown): value is Stamp {
-  if (typeof value !== "object" || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v.by === "string" &&
-    typeof v.role === "string" &&
-    typeof v.n === "number" &&
-    typeof v.at === "string"
-  );
+interface Props {
+  className?: string;
+  text?: string;
+  title?: string;
+  label?: string;
+  type?: string;
+  disabled?: boolean;
 }
 
-function describe(value: unknown): string {
-  if (value === undefined) return "nothing yet";
-  if (isStamp(value)) return `${value.by} (${value.role}) #${value.n} at ${value.at}`;
-  return JSON.stringify(value);
-}
-
-function makeStamp(): Stamp {
-  counter += 1;
-  return {
-    by: me.name || me.id,
-    role: me.role,
-    n: counter,
-    at: new Date().toLocaleTimeString(),
-  };
+// Builds an element with textContent only, so player-typed names can never inject HTML.
+function h<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  props: Props = {},
+  ...children: Node[]
+): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  if (props.className) node.className = props.className;
+  if (props.text !== undefined) node.textContent = props.text;
+  if (props.title) node.title = props.title;
+  if (props.label) node.setAttribute("aria-label", props.label);
+  if (props.type) node.setAttribute("type", props.type);
+  if (props.disabled !== undefined) node.toggleAttribute("disabled", props.disabled);
+  node.append(...children);
+  return node;
 }
 
 function errorText(error: unknown): string {
@@ -66,66 +85,210 @@ function errorText(error: unknown): string {
   }
 }
 
-function log(line: string): void {
-  const item = document.createElement("li");
-  item.textContent = `${new Date().toLocaleTimeString()}  ${line}`;
-  byId("log").prepend(item);
+function showNotice(message: string | null, info = false): void {
+  const notice = byId("notice");
+  notice.hidden = message === null;
+  notice.className = info ? "notice info" : "notice";
+  notice.textContent = message ?? "";
 }
 
-async function attempt(label: string, action: () => Promise<void>): Promise<void> {
+async function write(update: Update): Promise<void> {
+  if (Object.keys(update).length === 0) return;
   try {
-    await action();
-    log(`${label}: ok`);
+    await OBR.scene.setMetadata(update);
   } catch (error) {
-    log(`${label}: FAILED ${errorText(error)}`);
+    showNotice(`Could not save: ${errorText(error)}`);
   }
 }
 
+const isGM = (): boolean => me.role === "GM";
+
+// UI-level rule: the GM acts for everyone, players only for PCs they own.
+// The SDK does not enforce this; it is a table convention.
+const canAct = (c: Combatant): boolean => isGM() || (c.side === "PC" && c.ownerId === me.id);
+
+function renderRow(entry: Entry): HTMLElement {
+  const { combatant: c, speed } = entry;
+  const state = stateOf(entry);
+  const allowed = sceneReady && canAct(c);
+
+  const stateBtn = h("button", {
+    className: "state-btn",
+    text: STATE_SYMBOL[state],
+    title: `${STATE_LABEL[state]}. Click to change.`,
+    label: `${c.name}: ${STATE_LABEL[state]}`,
+    type: "button",
+    disabled: !allowed,
+  });
+  stateBtn.addEventListener("click", () =>
+    write(setTurnState(tracker, c.id, speed, NEXT_STATE[state])),
+  );
+
+  const name = h("span", { className: "name", text: c.name });
+  if (c.boss) name.append(h("span", { className: "tag", text: "Boss" }));
+  const nameCell = h("div", {}, name);
+
+  const controls = h("div");
+  if (!c.boss) {
+    const other = speed === "fast" ? "slow" : "fast";
+    const speedBtn = h("button", {
+      className: "speed-btn secondary",
+      text: speed === "fast" ? "Fast" : "Slow",
+      title: `Switch to ${other} turn (only before this turn starts)`,
+      type: "button",
+      disabled: !allowed || state !== "waiting",
+    });
+    speedBtn.addEventListener("click", () => write(setSpeed(tracker, c.id, other)));
+    controls.append(speedBtn);
+  }
+
+  const removeCell = h("div");
+  // Bosses appear in two lanes; only the fast row carries the remove button.
+  if (isGM() && (!c.boss || speed === "fast")) {
+    const removeBtn = h("button", {
+      className: "remove-btn",
+      text: "×",
+      title: `Remove ${c.name}`,
+      label: `Remove ${c.name}`,
+      type: "button",
+    });
+    removeBtn.addEventListener("click", () => write(removeCombatant(c.id)));
+    removeCell.append(removeBtn);
+  }
+
+  const classes = ["row", state];
+  if (c.side === "PC" && c.ownerId === me.id && !isGM()) classes.push("mine");
+  return h("div", { className: classes.join(" ") }, stateBtn, nameCell, controls, removeCell);
+}
+
+function renderLanes(): void {
+  const container = byId("lanes");
+  container.replaceChildren();
+  for (const lane of LANES) {
+    const entries = entriesInLane(tracker, lane);
+    const hasActive = entries.some((e) => stateOf(e) === "active");
+    const title = `${lane.speed === "fast" ? "Fast" : "Slow"} ${lane.side === "PC" ? "PCs" : "NPCs"}`;
+    const section = h(
+      "section",
+      { className: hasActive ? "lane has-active" : "lane" },
+      h("h2", { text: title }),
+    );
+    if (entries.length === 0) section.append(h("div", { className: "lane-empty", text: "Nobody" }));
+    for (const entry of entries) section.append(renderRow(entry));
+    container.append(section);
+  }
+}
+
+function renderOwnerOptions(): void {
+  const select = byId<HTMLSelectElement>("add-owner");
+  const previous = select.value;
+  select.replaceChildren(h("option", { text: "No owner" }));
+  select.options[0]!.value = "";
+  for (const player of partyPlayers) {
+    const option = h("option", { text: player.name || player.id });
+    option.value = player.id;
+    select.append(option);
+  }
+  select.value = [...select.options].some((o) => o.value === previous) ? previous : "";
+}
+
+function render(): void {
+  byId("round").textContent = `Round ${tracker.round}`;
+
+  if (!sceneReady) showNotice("Open a scene to use the tracker.", true);
+  else if (byId("notice").classList.contains("info")) showNotice(null);
+
+  const entries = allEntries(tracker);
+  const anyActive = entries.some((e) => stateOf(e) === "active");
+  const anyWaiting = entries.some((e) => stateOf(e) === "waiting");
+
+  byId("gm-actions").hidden = !isGM();
+  const nextBtn = byId<HTMLButtonElement>("next-btn");
+  nextBtn.disabled = !sceneReady || entries.length === 0;
+  nextBtn.textContent = !anyActive && !anyWaiting && entries.length > 0 ? "Next round" : "Next";
+
+  byId("add-form").hidden = !isGM() || !sceneReady;
+  renderLanes();
+}
+
+function wireControls(): void {
+  byId("next-btn").addEventListener("click", () => write(next(tracker)));
+
+  const clearBtn = byId<HTMLButtonElement>("clear-btn");
+  clearBtn.addEventListener("click", () => {
+    if (!clearArmed) {
+      clearArmed = true;
+      clearBtn.textContent = "Click again to clear";
+      clearBtn.classList.add("armed");
+      clearTimer = setTimeout(disarmClear, 3000);
+      return;
+    }
+    disarmClear();
+    void write(resetFight(tracker));
+  });
+
+  const sideSelect = byId<HTMLSelectElement>("add-side");
+  const ownerSelect = byId<HTMLSelectElement>("add-owner");
+  const syncOwnerVisibility = (): void => {
+    ownerSelect.hidden = sideSelect.value !== "PC";
+  };
+  sideSelect.addEventListener("change", syncOwnerVisibility);
+  syncOwnerVisibility();
+
+  byId<HTMLFormElement>("add-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const nameInput = byId<HTMLInputElement>("add-name");
+    const name = nameInput.value.trim();
+    if (!name) return;
+    const side: Side = sideSelect.value === "NPC" ? "NPC" : "PC";
+    void write(
+      addCombatant(tracker, {
+        id: crypto.randomUUID(),
+        name,
+        side,
+        boss: byId<HTMLInputElement>("add-boss").checked,
+        ownerId: side === "PC" && ownerSelect.value ? ownerSelect.value : null,
+      }),
+    );
+    nameInput.value = "";
+    nameInput.focus();
+  });
+}
+
+function disarmClear(): void {
+  clearArmed = false;
+  clearTimeout(clearTimer);
+  const clearBtn = byId<HTMLButtonElement>("clear-btn");
+  clearBtn.textContent = "Clear fight";
+  clearBtn.classList.remove("armed");
+}
+
+async function loadParty(): Promise<void> {
+  const players = await OBR.party.getPlayers();
+  partyPlayers = players
+    .filter((p) => p.role === "PLAYER")
+    .map((p) => ({ id: p.id, name: p.name }));
+  renderOwnerOptions();
+}
+
 OBR.onReady(async () => {
-  [me.id, me.name, me.role] = await Promise.all([
-    OBR.player.getId(),
-    OBR.player.getName(),
-    OBR.player.getRole(),
-  ]);
-  byId("who").textContent = `You are ${me.name || me.id}, role ${me.role}.`;
+  [me.id, me.role] = await Promise.all([OBR.player.getId(), OBR.player.getRole()]);
+  wireControls();
 
-  // Scene metadata. Only readable once a scene is loaded.
-  const showScene = (metadata: Record<string, unknown>): void => {
-    byId("scene-value").textContent = describe(metadata[KEY]);
-  };
-  if (await OBR.scene.isReady()) showScene(await OBR.scene.getMetadata());
+  await loadParty();
+  OBR.party.onChange(() => void loadParty());
+
+  sceneReady = await OBR.scene.isReady();
+  if (sceneReady) tracker = parseTracker(await OBR.scene.getMetadata());
   OBR.scene.onReadyChange(async (ready) => {
-    if (ready) showScene(await OBR.scene.getMetadata());
+    sceneReady = ready;
+    tracker = ready ? parseTracker(await OBR.scene.getMetadata()) : { round: 1, combatants: [] };
+    render();
   });
-  OBR.scene.onMetadataChange(showScene);
-  byId("scene-btn").addEventListener("click", () =>
-    attempt("scene metadata write", () => OBR.scene.setMetadata({ [KEY]: makeStamp() })),
-  );
-
-  // Room metadata. Lives with the room, not a particular scene.
-  const showRoom = (metadata: Record<string, unknown>): void => {
-    byId("room-value").textContent = describe(metadata[KEY]);
-  };
-  showRoom(await OBR.room.getMetadata());
-  OBR.room.onMetadataChange(showRoom);
-  byId("room-btn").addEventListener("click", () =>
-    attempt("room metadata write", () => OBR.room.setMetadata({ [KEY]: makeStamp() })),
-  );
-
-  // Broadcast. Not stored, so late joiners see nothing, but any role can send.
-  OBR.broadcast.onMessage(CHANNEL, (event) => {
-    log(`broadcast received: ${describe(event.data)}`);
+  OBR.scene.onMetadataChange((metadata) => {
+    tracker = parseTracker(metadata);
+    render();
   });
-  byId("bcast-btn").addEventListener("click", () =>
-    attempt("broadcast send", () =>
-      OBR.broadcast.sendMessage(CHANNEL, makeStamp(), { destination: "ALL" }),
-    ),
-  );
 
-  // Room permissions, as reported to this player.
-  const showPerms = (permissions: string[]): void => {
-    byId("perms").textContent = permissions.length ? permissions.join(", ") : "(none reported)";
-  };
-  showPerms(await OBR.room.getPermissions());
-  OBR.room.onPermissionsChange(showPerms);
+  render();
 });

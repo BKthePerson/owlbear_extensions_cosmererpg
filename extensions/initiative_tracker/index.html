@@ -8,39 +8,33 @@
   </head>
   <body>
     <main id="app">
-      <h1>Permissions spike</h1>
-      <p id="who">Connecting to Owlbear...</p>
-      <p class="hint">
-        Open this in a GM window and a player window. Press each button in both,
-        and check that the other window sees the value change.
-      </p>
+      <header>
+        <h1 id="round">Round 1</h1>
+        <div id="gm-actions" class="actions" hidden>
+          <button id="next-btn" type="button">Next</button>
+          <button id="clear-btn" type="button" class="secondary">Clear fight</button>
+        </div>
+      </header>
 
-      <section>
-        <h2>Scene metadata</h2>
-        <button id="scene-btn" type="button">Write</button>
-        <p>Value: <span id="scene-value">nothing yet</span></p>
-      </section>
+      <p id="notice" class="notice" hidden></p>
 
-      <section>
-        <h2>Room metadata</h2>
-        <button id="room-btn" type="button">Write</button>
-        <p>Value: <span id="room-value">nothing yet</span></p>
-      </section>
+      <div id="lanes"></div>
 
-      <section>
-        <h2>Broadcast</h2>
-        <button id="bcast-btn" type="button">Send to everyone</button>
-      </section>
-
-      <section>
-        <h2>Room permissions for this player</h2>
-        <p id="perms" class="mono">...</p>
-      </section>
-
-      <section>
-        <h2>Log</h2>
-        <ul id="log"></ul>
-      </section>
+      <form id="add-form" hidden>
+        <h2>Add combatant</h2>
+        <div class="form-row">
+          <input id="add-name" type="text" placeholder="Name" maxlength="60" required />
+          <select id="add-side" aria-label="Side">
+            <option value="PC">PC</option>
+            <option value="NPC">NPC</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <select id="add-owner" aria-label="Player who controls this PC"></select>
+          <label class="check"><input id="add-boss" type="checkbox" /> Boss</label>
+          <button type="submit">Add</button>
+        </div>
+      </form>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

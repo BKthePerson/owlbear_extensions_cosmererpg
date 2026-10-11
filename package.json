@@ -12,10 +12,12 @@
   "scripts": {
     "dev": "npm run dev -w initiative_tracker",
     "build": "npm run build -w initiative_tracker",
-    "typecheck": "npm run typecheck -w initiative_tracker"
+    "typecheck": "npm run typecheck -w initiative_tracker",
+    "test": "npm run test -w initiative_tracker"
   },
   "devDependencies": {
     "vite": "^8.3.4",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "@types/node": "^22.0.0"
   }
 }
