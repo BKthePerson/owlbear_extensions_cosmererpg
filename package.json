@@ -7,8 +7,13 @@
   "type": "commonjs",
   "main": "index.js",
   "private": true,
-  "workspaces":["extensions/*"],
+  "workspaces": [
+    "extensions/*"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.4"
   }
 }
