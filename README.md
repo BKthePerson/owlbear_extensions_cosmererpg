@@ -1,13 +1,17 @@
 # Owlbear extensions for the Cosmere RPG
 
-Custom [Owlbear Rodeo](https://www.owlbear.rodeo) extensions for running the Cosmere RPG (Mistborn setting). TypeScript, Vite, Owlbear SDK 3.1.
+Custom [Owlbear Rodeo](https://www.owlbear.rodeo) extensions for running the Cosmere RPG. TypeScript, Vite, Owlbear SDK 3.1. These extensions are built with Claude.
 
 | Extension | What it does |
 | --- | --- |
-| `initiative_tracker` | Fast and slow turn tracker with four bands (fast PC, fast NPC, slow PC, slow NPC), action arrows, Done marks, Down and Dead states. |
+| `initiative_tracker` | Cosmere RPG Combat Turn Tracker. Handles the four bands of action (fast PC, fast NPC, slow PC, slow NPC), and has basic state tracking (action arrows, Done marks, Down and Dead). |
 
 The deployed site has a landing page with the manifest URL and a player and GM guide:
 https://bktheperson.github.io/owlbear_extensions_cosmererpg/
+
+## Request features and report bugs!
+
+Feel free to report any bugs or request features using issues.
 
 ## Add it to Owlbear
 
@@ -67,3 +71,6 @@ To change the landing page, edit `extensions/initiative_tracker/public/index.htm
 ## Known issues
 
 2 moderate vulnerabilities reported in the Owlbear SDK dependency, with no fix available as of October 2026.
+
+## About me
+I'm a DM and a player, and I'm looking for ways to burn my extra tokens that are functional and beneficial. My coding background is from academic research, so you would probably prefer this vibe-coded stuff over what I pump out by hand!
