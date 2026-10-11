@@ -16,7 +16,7 @@ export function buildManifest(base: string) {
     action: {
       title: "Initiative",
       icon: `${prefix}icon.svg`,
-      popover: `${prefix}index.html`,
+      popover: `${prefix}popover.html`,
       width: 420,
       height: 620,
     },

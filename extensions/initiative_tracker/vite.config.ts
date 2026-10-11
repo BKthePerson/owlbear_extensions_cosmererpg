@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 import { buildManifest } from "./manifest.ts";
 
@@ -34,5 +35,10 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    // The popover is the only page Vite processes. index.html (landing page)
+    // and guide.html are static files in public/ and are copied as they are.
+    rollupOptions: {
+      input: fileURLToPath(new URL("./popover.html", import.meta.url)),
+    },
   },
 });
