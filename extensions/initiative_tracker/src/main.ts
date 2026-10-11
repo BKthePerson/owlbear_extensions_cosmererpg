@@ -1,10 +1,12 @@
 import OBR from "@owlbear-rodeo/sdk";
 import {
+  ACTIONS,
   LANES,
   addCombatant,
-  allEntries,
+  emptyTracker,
   entriesInLane,
   next,
+  nextAction,
   parseTracker,
   removeCombatant,
   resetFight,
@@ -14,8 +16,8 @@ import {
   type Combatant,
   type Entry,
   type Side,
-  type TurnState,
   type Tracker,
+  type TurnState,
   type Update,
 } from "./state.ts";
 
@@ -25,24 +27,19 @@ interface PartyPlayer {
   name: string;
 }
 
-const me: { id: string; role: Role } = { id: "", role: "PLAYER" };
-let tracker: Tracker = { round: 1, combatants: [] };
+const me: { id: string; name: string; role: Role } = { id: "", name: "", role: "PLAYER" };
+let tracker: Tracker = emptyTracker();
 let sceneReady = false;
 let partyPlayers: PartyPlayer[] = [];
+// Every player name we know, by Owlbear player id, including this player.
+const playerNames = new Map<string, string>();
 let clearArmed = false;
 let clearTimer: ReturnType<typeof setTimeout> | undefined;
 
-const STATE_SYMBOL: Record<TurnState, string> = { waiting: "○", active: "▶", done: "✓" };
-const STATE_LABEL: Record<TurnState, string> = {
-  waiting: "Waiting",
-  active: "Active",
-  done: "Done",
-};
-const NEXT_STATE: Record<TurnState, TurnState> = {
-  waiting: "active",
-  active: "done",
-  done: "waiting",
-};
+const STATE_SYMBOL: Record<TurnState, string> = { waiting: "○", done: "✓" };
+const STATE_LABEL: Record<TurnState, string> = { waiting: "Waiting", done: "Done" };
+const TOGGLE_STATE: Record<TurnState, TurnState> = { waiting: "done", done: "waiting" };
+const NEXT_LABEL = { start: "Start round", band: "Next band", round: "Next round" } as const;
 
 function byId<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -104,33 +101,42 @@ async function write(update: Update): Promise<void> {
 const isGM = (): boolean => me.role === "GM";
 
 // UI-level rules. The SDK does not enforce them; they are a table convention.
-// - Turn order (state markers, Next, Clear fight, add and remove) is GM only.
-// - A player can only switch fast or slow for PCs they own. The GM can do it for anyone.
-const canChooseSpeed = (c: Combatant): boolean =>
-  isGM() || (c.side === "PC" && c.ownerId === me.id);
+// - Moving the band (Next), Clear fight, add and remove are GM only.
+// - A player controls only PCs they own: fast or slow, and marking their own turn Done.
+// - The GM controls every row.
+const canControl = (c: Combatant): boolean =>
+  isGM() || (c.side === "PC" && c.ownerId !== null && c.ownerId === me.id);
+
+// Live name if the player is in the room, otherwise the name saved when they were assigned.
+const ownerLabel = (c: Combatant): string | null =>
+  c.ownerId === null ? null : (playerNames.get(c.ownerId) ?? c.ownerName);
 
 function renderRow(entry: Entry): HTMLElement {
   const { combatant: c, speed } = entry;
   const state = stateOf(entry);
-  const canSpeed = sceneReady && canChooseSpeed(c);
-  const gmControls = sceneReady && isGM();
+  const controllable = sceneReady && canControl(c);
 
   const stateBtn = h("button", {
     className: "state-btn",
     text: STATE_SYMBOL[state],
-    title: gmControls ? `${STATE_LABEL[state]}. Click to change.` : STATE_LABEL[state],
+    title: controllable ? `${STATE_LABEL[state]}. Click to toggle.` : STATE_LABEL[state],
     label: `${c.name}: ${STATE_LABEL[state]}`,
     type: "button",
-    disabled: !gmControls,
+    disabled: !controllable,
   });
   stateBtn.addEventListener("click", () => {
-    if (!isGM()) return;
-    void write(setTurnState(tracker, c.id, speed, NEXT_STATE[state]));
+    if (!canControl(c)) return;
+    void write(setTurnState(tracker, c.id, speed, TOGGLE_STATE[state]));
   });
 
   const name = h("span", { className: "name", text: c.name });
   if (c.boss) name.append(h("span", { className: "tag", text: "Boss" }));
   const nameCell = h("div", {}, name);
+  // Show the player's name small beside the character, unless it is the same text.
+  const owner = ownerLabel(c);
+  if (owner && owner !== c.name) {
+    nameCell.append(h("span", { className: "owner", text: owner, title: "Player" }));
+  }
 
   const controls = h("div");
   if (!c.boss) {
@@ -140,10 +146,10 @@ function renderRow(entry: Entry): HTMLElement {
       text: speed === "fast" ? "Fast" : "Slow",
       title: `Switch to ${other} turn (only before this turn starts)`,
       type: "button",
-      disabled: !canSpeed || state !== "waiting",
+      disabled: !controllable || state !== "waiting",
     });
     speedBtn.addEventListener("click", () => {
-      if (!canChooseSpeed(c)) return;
+      if (!canControl(c)) return;
       void write(setSpeed(tracker, c.id, other));
     });
     controls.append(speedBtn);
@@ -166,26 +172,35 @@ function renderRow(entry: Entry): HTMLElement {
   }
 
   const classes = ["row", state];
-  if (c.side === "PC" && c.ownerId === me.id && !isGM()) classes.push("mine");
+  if (!isGM() && canControl(c)) classes.push("mine");
   return h("div", { className: classes.join(" ") }, stateBtn, nameCell, controls, removeCell);
+}
+
+// Two solid arrows for a fast turn (2 actions), three for a slow turn (3 actions).
+function pips(speed: "fast" | "slow"): HTMLElement {
+  const count = ACTIONS[speed];
+  return h("span", {
+    className: "pips",
+    text: "▶".repeat(count),
+    title: `${count} actions`,
+    label: `${count} actions`,
+  });
 }
 
 function renderLanes(): void {
   const container = byId("lanes");
   container.replaceChildren();
-  for (const lane of LANES) {
+  LANES.forEach((lane, index) => {
     const entries = entriesInLane(tracker, lane);
-    const hasActive = entries.some((e) => stateOf(e) === "active");
+    const current = tracker.band === index;
     const title = `${lane.speed === "fast" ? "Fast" : "Slow"} ${lane.side === "PC" ? "PCs" : "NPCs"}`;
-    const section = h(
-      "section",
-      { className: hasActive ? "lane has-active" : "lane" },
-      h("h2", { text: title }),
-    );
+    const heading = h("h2", { text: title }, pips(lane.speed));
+    if (current) heading.append(h("span", { className: "now", text: "Now" }));
+    const section = h("section", { className: current ? "lane current" : "lane" }, heading);
     if (entries.length === 0) section.append(h("div", { className: "lane-empty", text: "Nobody" }));
     for (const entry of entries) section.append(renderRow(entry));
     container.append(section);
-  }
+  });
 }
 
 function renderOwnerOptions(): void {
@@ -207,14 +222,12 @@ function render(): void {
   if (!sceneReady) showNotice("Open a scene to use the tracker.", true);
   else if (byId("notice").classList.contains("info")) showNotice(null);
 
-  const entries = allEntries(tracker);
-  const anyActive = entries.some((e) => stateOf(e) === "active");
-  const anyWaiting = entries.some((e) => stateOf(e) === "waiting");
+  const action = nextAction(tracker);
 
   byId("gm-actions").hidden = !isGM();
   const nextBtn = byId<HTMLButtonElement>("next-btn");
-  nextBtn.disabled = !sceneReady || entries.length === 0;
-  nextBtn.textContent = !anyActive && !anyWaiting && entries.length > 0 ? "Next round" : "Next";
+  nextBtn.disabled = !sceneReady || action === null;
+  nextBtn.textContent = NEXT_LABEL[action ?? "start"];
 
   byId("add-form").hidden = !isGM() || !sceneReady;
   renderLanes();
@@ -251,16 +264,24 @@ function wireControls(): void {
     event.preventDefault();
     if (!isGM()) return;
     const nameInput = byId<HTMLInputElement>("add-name");
-    const name = nameInput.value.trim();
-    if (!name) return;
     const side: Side = sideSelect.value === "NPC" ? "NPC" : "PC";
+    const ownerId = side === "PC" && ownerSelect.value ? ownerSelect.value : null;
+    const ownerName = ownerId ? (playerNames.get(ownerId) ?? null) : null;
+    // A blank name falls back to the chosen player's name.
+    const name = nameInput.value.trim() || ownerName;
+    if (!name) {
+      showNotice("Enter a name, or pick a player to use their name.");
+      return;
+    }
+    showNotice(null);
     void write(
       addCombatant(tracker, {
         id: crypto.randomUUID(),
         name,
         side,
         boss: byId<HTMLInputElement>("add-boss").checked,
-        ownerId: side === "PC" && ownerSelect.value ? ownerSelect.value : null,
+        ownerId,
+        ownerName,
       }),
     );
     nameInput.value = "";
@@ -281,11 +302,19 @@ async function loadParty(): Promise<void> {
   partyPlayers = players
     .filter((p) => p.role === "PLAYER")
     .map((p) => ({ id: p.id, name: p.name }));
+  playerNames.clear();
+  playerNames.set(me.id, me.name);
+  for (const p of players) playerNames.set(p.id, p.name);
   renderOwnerOptions();
+  render();
 }
 
 OBR.onReady(async () => {
-  [me.id, me.role] = await Promise.all([OBR.player.getId(), OBR.player.getRole()]);
+  [me.id, me.name, me.role] = await Promise.all([
+    OBR.player.getId(),
+    OBR.player.getName(),
+    OBR.player.getRole(),
+  ]);
   wireControls();
 
   await loadParty();
@@ -295,7 +324,7 @@ OBR.onReady(async () => {
   if (sceneReady) tracker = parseTracker(await OBR.scene.getMetadata());
   OBR.scene.onReadyChange(async (ready) => {
     sceneReady = ready;
-    tracker = ready ? parseTracker(await OBR.scene.getMetadata()) : { round: 1, combatants: [] };
+    tracker = ready ? parseTracker(await OBR.scene.getMetadata()) : emptyTracker();
     render();
   });
   OBR.scene.onMetadataChange((metadata) => {

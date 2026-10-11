@@ -8,6 +8,8 @@
   --active: #3b3566;
   --danger: #ff6b81;
 }
+/* Author display rules (like .actions { display: flex }) would otherwise override the hidden attribute. */
+[hidden] { display: none !important; }
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -36,8 +38,30 @@ button.secondary { background: var(--card); color: var(--fg); border: 1px solid 
 button.armed { background: var(--danger); color: #111; border: 0; }
 button:disabled { opacity: 0.4; cursor: default; }
 
-.lane { margin: 10px 0; }
-.lane.has-active h2 { color: var(--accent); }
+.lane {
+  margin: 8px 0;
+  padding: 6px 8px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  opacity: 0.75;
+}
+.lane.current {
+  opacity: 1;
+  background: var(--active);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(187, 153, 255, 0.35);
+}
+.lane.current h2 { color: var(--fg); }
+.pips { color: var(--accent); letter-spacing: -2px; margin-left: 8px; font-size: 11px; }
+.now {
+  margin-left: 8px;
+  background: var(--accent);
+  color: #111;
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
 .lane-empty { color: var(--muted); font-size: 12px; padding: 2px 0 2px 4px; }
 
 .row {
@@ -50,9 +74,9 @@ button:disabled { opacity: 0.4; cursor: default; }
   padding: 4px 6px;
   margin-bottom: 4px;
 }
-.row.active { background: var(--active); outline: 1px solid var(--accent); }
 .row.done .name { opacity: 0.5; text-decoration: line-through; }
 .row.done { opacity: 0.7; }
+.row.mine { border-left: 3px solid var(--accent); }
 .row.mine .name::after { content: " (you)"; color: var(--muted); font-size: 12px; }
 
 .state-btn {
@@ -63,10 +87,10 @@ button:disabled { opacity: 0.4; cursor: default; }
   font-size: 14px; line-height: 1;
 }
 .state-btn:disabled { opacity: 1; cursor: default; }
-.row.active .state-btn { background: var(--accent); color: #111; border: 0; }
 .row.done .state-btn { background: #4b7a5a; color: #fff; border: 0; }
 
 .name { overflow-wrap: anywhere; }
+.owner { color: var(--muted); font-size: 11px; margin-left: 6px; }
 .tag { font-size: 11px; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 0 4px; margin-left: 4px; }
 .speed-btn { min-width: 52px; font-size: 12px; }
 .remove-btn { background: transparent; color: var(--muted); border: 0; padding: 2px 6px; font-size: 16px; }
