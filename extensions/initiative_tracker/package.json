@@ -7,11 +7,13 @@
   ],
   "license": "MIT",
   "author": "Brandon Klein",
-  "type": "commonjs",
-  "main": "index.js",
+  "type": "module",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "vite"
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@owlbear-rodeo/sdk": "^3.1.0"

@@ -4,16 +4,18 @@
   "description": "Extensions for owlbear rodeo for the cosmere RPG",
   "license": "MIT",
   "author": "Brandon Klein",
-  "type": "commonjs",
-  "main": "index.js",
+  "type": "module",
   "private": true,
   "workspaces": [
     "extensions/*"
   ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "npm run dev -w initiative_tracker",
+    "build": "npm run build -w initiative_tracker",
+    "typecheck": "npm run typecheck -w initiative_tracker"
   },
   "devDependencies": {
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "typescript": "^5.9.0"
   }
 }
