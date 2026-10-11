@@ -3,19 +3,24 @@ import {
   ACTIONS,
   LANES,
   addCombatant,
+  canGoBack,
+  deadCombatants,
   emptyTracker,
   entriesInLane,
   next,
   nextAction,
   parseTracker,
+  previous,
   removeCombatant,
   resetFight,
   setSpeed,
+  setStatus,
   setTurnState,
   stateOf,
   type Combatant,
   type Entry,
   type Side,
+  type Status,
   type Tracker,
   type TurnState,
   type Update,
@@ -33,12 +38,15 @@ let sceneReady = false;
 let partyPlayers: PartyPlayer[] = [];
 // Every player name we know, by Owlbear player id, including this player.
 const playerNames = new Map<string, string>();
+let openMenuId: string | null = null; // which row's "⋯" menu is open (GM only)
+let outOpen = false; // whether the "Out of the fight" list is expanded
 let clearArmed = false;
 let clearTimer: ReturnType<typeof setTimeout> | undefined;
 
 const STATE_SYMBOL: Record<TurnState, string> = { waiting: "○", done: "✓" };
 const STATE_LABEL: Record<TurnState, string> = { waiting: "Waiting", done: "Done" };
 const TOGGLE_STATE: Record<TurnState, TurnState> = { waiting: "done", done: "waiting" };
+const STATUS_LABEL: Record<Status, string> = { active: "Active", down: "Down", dead: "Dead" };
 const NEXT_LABEL = { start: "Start round", band: "Next band", round: "Next round" } as const;
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -111,16 +119,89 @@ const canControl = (c: Combatant): boolean =>
 const ownerLabel = (c: Combatant): string | null =>
   c.ownerId === null ? null : (playerNames.get(c.ownerId) ?? c.ownerName);
 
+function closeMenu(): void {
+  if (openMenuId === null) return;
+  openMenuId = null;
+  render();
+}
+
+// GM-only "⋯" menu: set Active, Down or Dead, or remove the combatant.
+function renderMenu(c: Combatant): HTMLElement {
+  const cell = h("div", { className: "menu-cell" });
+  if (!isGM() || !sceneReady) return cell;
+
+  const button = h("button", {
+    className: "menu-btn secondary",
+    text: "⋯",
+    title: `Status and options for ${c.name}`,
+    label: `Options for ${c.name}`,
+    type: "button",
+  });
+  button.addEventListener("click", () => {
+    openMenuId = openMenuId === c.id ? null : c.id;
+    render();
+  });
+  cell.append(button);
+
+  if (openMenuId === c.id) {
+    const menu = h("div", { className: "menu" });
+    for (const status of ["active", "down", "dead"] as const) {
+      const item = h("button", {
+        className: c.status === status ? "menu-item current" : "menu-item",
+        text: `${c.status === status ? "✓ " : ""}${STATUS_LABEL[status]}`,
+        type: "button",
+      });
+      item.addEventListener("click", () => {
+        if (!isGM()) return;
+        openMenuId = null;
+        void write(setStatus(tracker, c.id, status));
+        render();
+      });
+      menu.append(item);
+    }
+    const remove = h("button", { className: "menu-item danger", text: "Remove", type: "button" });
+    remove.addEventListener("click", () => {
+      if (!isGM()) return;
+      openMenuId = null;
+      void write(removeCombatant(c.id));
+      render();
+    });
+    menu.append(remove);
+    cell.append(menu);
+  }
+  return cell;
+}
+
+function renderNameCell(c: Combatant, extraTag?: string): HTMLElement {
+  const name = h("span", { className: "name", text: c.name });
+  if (c.boss) name.append(h("span", { className: "tag", text: "Boss" }));
+  if (extraTag) name.append(h("span", { className: "tag status-tag", text: extraTag }));
+  const cell = h("div", {}, name);
+  // Show the player's name small beside the character, unless it is the same text.
+  const owner = ownerLabel(c);
+  if (owner && owner !== c.name) {
+    cell.append(h("span", { className: "owner", text: owner, title: "Player" }));
+  }
+  return cell;
+}
+
 function renderRow(entry: Entry): HTMLElement {
   const { combatant: c, speed } = entry;
   const state = stateOf(entry);
-  const controllable = sceneReady && canControl(c);
+  const isActive = c.status === "active";
+  const controllable = sceneReady && canControl(c) && isActive;
 
+  const stateTitle = !isActive
+    ? STATUS_LABEL[c.status]
+    : controllable
+      ? `${STATE_LABEL[state]}. Click to toggle.`
+      : STATE_LABEL[state];
   const stateBtn = h("button", {
-    className: "state-btn",
-    text: STATE_SYMBOL[state],
-    title: controllable ? `${STATE_LABEL[state]}. Click to toggle.` : STATE_LABEL[state],
-    label: `${c.name}: ${STATE_LABEL[state]}`,
+    className: isActive ? "state-btn" : "state-btn down",
+    // A downed combatant shows a down triangle in place of the waiting or done mark.
+    text: isActive ? STATE_SYMBOL[state] : "▼",
+    title: stateTitle,
+    label: `${c.name}: ${isActive ? STATE_LABEL[state] : STATUS_LABEL[c.status]}`,
     type: "button",
     disabled: !controllable,
   });
@@ -128,15 +209,6 @@ function renderRow(entry: Entry): HTMLElement {
     if (!canControl(c)) return;
     void write(setTurnState(tracker, c.id, speed, TOGGLE_STATE[state]));
   });
-
-  const name = h("span", { className: "name", text: c.name });
-  if (c.boss) name.append(h("span", { className: "tag", text: "Boss" }));
-  const nameCell = h("div", {}, name);
-  // Show the player's name small beside the character, unless it is the same text.
-  const owner = ownerLabel(c);
-  if (owner && owner !== c.name) {
-    nameCell.append(h("span", { className: "owner", text: owner, title: "Player" }));
-  }
 
   const controls = h("div");
   if (!c.boss) {
@@ -155,25 +227,39 @@ function renderRow(entry: Entry): HTMLElement {
     controls.append(speedBtn);
   }
 
-  const removeCell = h("div");
-  // Bosses appear in two lanes; only the fast row carries the remove button.
-  if (isGM() && (!c.boss || speed === "fast")) {
-    const removeBtn = h("button", {
-      className: "remove-btn",
-      text: "×",
-      title: `Remove ${c.name}`,
-      label: `Remove ${c.name}`,
-      type: "button",
-    });
-    removeBtn.addEventListener("click", () => {
-      if (isGM()) void write(removeCombatant(c.id));
-    });
-    removeCell.append(removeBtn);
-  }
+  // Bosses appear in two lanes; only the fast row carries the menu.
+  const menuCell = !c.boss || speed === "fast" ? renderMenu(c) : h("div");
 
   const classes = ["row", state];
+  if (c.status === "down") classes.push("down");
   if (!isGM() && canControl(c)) classes.push("mine");
-  return h("div", { className: classes.join(" ") }, stateBtn, nameCell, controls, removeCell);
+  const tag = c.status === "down" ? "Down" : undefined;
+  return h("div", { className: classes.join(" ") }, stateBtn, renderNameCell(c, tag), controls, menuCell);
+}
+
+// Dead combatants sit outside the bands, in a collapsed list at the bottom.
+function renderOut(): HTMLElement | null {
+  const dead = deadCombatants(tracker);
+  if (dead.length === 0) return null;
+  const details = h("details", { className: "out" });
+  details.open = outOpen;
+  details.addEventListener("toggle", () => {
+    outOpen = details.open;
+  });
+  details.append(h("summary", { text: `Out of the fight (${dead.length})` }));
+  for (const c of dead) {
+    details.append(
+      h(
+        "div",
+        { className: "row dead" },
+        h("span", { className: "dead-mark", text: "✕", title: "Dead" }),
+        renderNameCell(c, "Dead"),
+        h("div"),
+        renderMenu(c),
+      ),
+    );
+  }
+  return details;
 }
 
 // Two solid arrows for a fast turn (2 actions), three for a slow turn (3 actions).
@@ -201,6 +287,8 @@ function renderLanes(): void {
     for (const entry of entries) section.append(renderRow(entry));
     container.append(section);
   });
+  const out = renderOut();
+  if (out) container.append(out);
 }
 
 function renderOwnerOptions(): void {
@@ -225,6 +313,7 @@ function render(): void {
   const action = nextAction(tracker);
 
   byId("gm-actions").hidden = !isGM();
+  byId<HTMLButtonElement>("back-btn").disabled = !sceneReady || !canGoBack(tracker);
   const nextBtn = byId<HTMLButtonElement>("next-btn");
   nextBtn.disabled = !sceneReady || action === null;
   nextBtn.textContent = NEXT_LABEL[action ?? "start"];
@@ -234,6 +323,16 @@ function render(): void {
 }
 
 function wireControls(): void {
+  byId("back-btn").addEventListener("click", () => {
+    if (isGM()) void write(previous(tracker));
+  });
+  // Clicking anywhere outside an open menu closes it.
+  document.addEventListener("click", (event) => {
+    if (openMenuId === null) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest(".menu-cell")) return;
+    closeMenu();
+  });
   byId("next-btn").addEventListener("click", () => {
     if (isGM()) void write(next(tracker));
   });

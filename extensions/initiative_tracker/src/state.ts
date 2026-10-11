@@ -17,6 +17,8 @@ const COMBATANT_PREFIX = `${NS}/c/`;
 export type Side = "PC" | "NPC";
 export type Speed = "fast" | "slow";
 export type TurnState = "waiting" | "done";
+// Down: unconscious or incapacitated, may come back. Dead: out of the fight.
+export type Status = "active" | "down" | "dead";
 
 export interface Lane {
   speed: Speed;
@@ -45,6 +47,7 @@ export interface Combatant {
   order: number; // creation order, used as the tiebreak inside a lane
   fast: TurnState;
   slow: TurnState;
+  status: Status;
 }
 
 export interface Tracker {
@@ -81,10 +84,11 @@ const isSpeed = (v: unknown): v is Speed => v === "fast" || v === "slow";
 // Anything other than "done" counts as waiting, which also tolerates data from
 // the earlier version that stored an "active" state.
 const toTurnState = (v: unknown): TurnState => (v === "done" ? "done" : "waiting");
+const toStatus = (v: unknown): Status => (v === "down" || v === "dead" ? v : "active");
 
 function parseCombatant(value: unknown): Combatant | null {
   if (typeof value !== "object" || value === null) return null;
-  const { id, name, side, boss, speed, ownerId, ownerName, order, fast, slow } = value as Record<
+  const { id, name, side, boss, speed, ownerId, ownerName, order, fast, slow, status } = value as Record<
     string,
     unknown
   >;
@@ -109,6 +113,7 @@ function parseCombatant(value: unknown): Combatant | null {
     order,
     fast: toTurnState(fast),
     slow: toTurnState(slow),
+    status: toStatus(status),
   };
 }
 
@@ -137,18 +142,23 @@ export const stateOf = (entry: Entry): TurnState =>
 const bandOf = (entry: Entry): number =>
   LANES.findIndex((l) => l.side === entry.combatant.side && l.speed === entry.speed);
 
-// Every turn in the round, in band order.
+// Every turn in the round, in band order. Dead combatants take no turns.
 export function allEntries(tracker: Tracker): Entry[] {
-  const entries: Entry[] = tracker.combatants.flatMap((combatant) =>
-    combatant.boss
-      ? [
-          { combatant, speed: "fast" as const },
-          { combatant, speed: "slow" as const },
-        ]
-      : [{ combatant, speed: combatant.speed }],
-  );
+  const entries: Entry[] = tracker.combatants
+    .filter((combatant) => combatant.status !== "dead")
+    .flatMap((combatant) =>
+      combatant.boss
+        ? [
+            { combatant, speed: "fast" as const },
+            { combatant, speed: "slow" as const },
+          ]
+        : [{ combatant, speed: combatant.speed }],
+    );
   return entries.sort((a, b) => bandOf(a) - bandOf(b) || a.combatant.order - b.combatant.order);
 }
+
+export const deadCombatants = (tracker: Tracker): Combatant[] =>
+  tracker.combatants.filter((c) => c.status === "dead");
 
 export function entriesInLane(tracker: Tracker, lane: Lane): Entry[] {
   return allEntries(tracker).filter(
@@ -181,6 +191,7 @@ export function addCombatant(tracker: Tracker, input: NewCombatant): Update {
     order,
     fast: "waiting",
     slow: "waiting",
+    status: "active",
   };
   return toUpdate([combatant]);
 }
@@ -197,7 +208,7 @@ export function resetFight(tracker: Tracker): Update {
 // Switch fast/slow. Only allowed before this turn is marked Done, and never for bosses.
 export function setSpeed(tracker: Tracker, id: string, speed: Speed): Update {
   const c = tracker.combatants.find((x) => x.id === id);
-  if (!c || c.boss || c.speed === speed) return {};
+  if (!c || c.boss || c.status !== "active" || c.speed === speed) return {};
   if (stateOf({ combatant: c, speed: c.speed }) !== "waiting") return {};
   return toUpdate([{ ...c, speed, fast: "waiting", slow: "waiting" }]);
 }
@@ -210,9 +221,32 @@ export function setTurnState(
   state: TurnState,
 ): Update {
   const c = tracker.combatants.find((x) => x.id === id);
-  if (!c) return {};
+  if (!c || c.status !== "active") return {};
   if (!allEntries(tracker).some((e) => e.combatant.id === id && e.speed === speed)) return {};
   return toUpdate([speed === "fast" ? { ...c, fast: state } : { ...c, slow: state }]);
+}
+
+// GM sets a combatant Active, Down or Dead. Done marks and fast/slow are kept.
+export function setStatus(tracker: Tracker, id: string, status: Status): Update {
+  const c = tracker.combatants.find((x) => x.id === id);
+  if (!c || c.status === status) return {};
+  return toUpdate([{ ...c, status }]);
+}
+
+// Back goes to the previous occupied band. It never touches Done marks and never
+// crosses into the previous round.
+export function canGoBack(tracker: Tracker): boolean {
+  if (tracker.band === null) return false;
+  return occupiedBands(tracker).slice(0, tracker.band).some(Boolean);
+}
+
+export function previous(tracker: Tracker): Update {
+  if (tracker.band === null) return {};
+  const occupied = occupiedBands(tracker);
+  for (let i = tracker.band - 1; i >= 0; i--) {
+    if (occupied[i]) return metaUpdate(tracker.round, i);
+  }
+  return {};
 }
 
 // What pressing Next will do, for labelling the button.

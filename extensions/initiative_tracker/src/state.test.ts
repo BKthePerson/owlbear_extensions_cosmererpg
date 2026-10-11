@@ -6,12 +6,16 @@ import {
   allEntries,
   combatantKey,
   emptyTracker,
+  canGoBack,
+  deadCombatants,
   next,
   nextAction,
   parseTracker,
   removeCombatant,
+  previous,
   resetFight,
   setSpeed,
+  setStatus,
   setTurnState,
   stateOf,
   type NewCombatant,
@@ -165,4 +169,77 @@ test("owner id and name are kept, and missing ones load as null", () => {
   });
   assert.equal(t.combatants[0]?.ownerId, null);
   assert.equal(t.combatants[0]?.ownerName, null);
+});
+
+test("status defaults to active and can be set", () => {
+  let t = build(pc("a"));
+  assert.equal(t.combatants[0]?.status, "active");
+  t = apply(t, setStatus(t, "a", "down"));
+  assert.equal(t.combatants[0]?.status, "down");
+  assert.deepEqual(setStatus(t, "a", "down"), {});
+});
+
+test("a Down combatant stays in its band but cannot be marked Done or change speed", () => {
+  let t = build(pc("a"));
+  t = apply(t, setStatus(t, "a", "down"));
+  assert.equal(allEntries(t).length, 1);
+  assert.deepEqual(setTurnState(t, "a", "fast", "done"), {});
+  assert.deepEqual(setSpeed(t, "a", "slow"), {});
+  t = apply(t, setStatus(t, "a", "active"));
+  assert.notDeepEqual(setTurnState(t, "a", "fast", "done"), {});
+});
+
+test("a Dead combatant leaves the bands and shows in the out-of-fight list", () => {
+  let t = build(pc("a"), npc("boss", true));
+  t = apply(t, setStatus(t, "boss", "dead"));
+  assert.equal(allEntries(t).length, 1);
+  assert.deepEqual(deadCombatants(t).map((c) => c.id), ["boss"]);
+});
+
+test("Next skips a band that holds only dead combatants", () => {
+  let t = build(pc("a"), npc("goon"), npc("thug"));
+  t = apply(t, setSpeed(t, "thug", "slow"));
+  t = apply(t, setStatus(t, "goon", "dead"));
+  t = apply(t, next(t));
+  assert.equal(t.band, 0);
+  t = apply(t, next(t));
+  assert.equal(t.band, 3);
+});
+
+test("a new round keeps Down and Dead", () => {
+  let t = build(pc("a"), pc("b"));
+  t = apply(t, setStatus(t, "a", "down"));
+  t = apply(t, setStatus(t, "b", "dead"));
+  t = apply(t, next(t));
+  t = apply(t, next(t));
+  assert.equal(t.round, 2);
+  assert.equal(t.combatants.find((c) => c.id === "a")?.status, "down");
+  assert.equal(t.combatants.find((c) => c.id === "b")?.status, "dead");
+});
+
+test("Back goes to the previous occupied band without touching Done marks", () => {
+  let t = build(pc("a"), npc("goon"), npc("thug"));
+  t = apply(t, setSpeed(t, "thug", "slow"));
+  t = apply(t, next(t));
+  t = apply(t, setTurnState(t, "a", "fast", "done"));
+  t = apply(t, next(t));
+  t = apply(t, next(t));
+  assert.equal(t.band, 3);
+
+  t = apply(t, previous(t));
+  assert.equal(t.band, 1);
+  assert.equal(t.round, 1);
+  assert.equal(stateById(t, "a", "fast"), "done");
+});
+
+test("Back does nothing before the round starts or at the first occupied band", () => {
+  let t = build(pc("a"), npc("goon"));
+  assert.equal(canGoBack(t), false);
+  assert.deepEqual(previous(t), {});
+  t = apply(t, next(t));
+  assert.equal(t.band, 0);
+  assert.equal(canGoBack(t), false);
+  assert.deepEqual(previous(t), {});
+  t = apply(t, next(t));
+  assert.equal(canGoBack(t), true);
 });
