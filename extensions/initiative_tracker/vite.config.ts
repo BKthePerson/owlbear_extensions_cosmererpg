@@ -1,9 +1,30 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
+import { buildManifest } from "./manifest.ts";
 
-// Relative base so the build works from a GitHub Pages project path
-// (https://<user>.github.io/<repo>/) as well as from localhost.
+// "/" for local dev. The Pages workflow sets BASE_PATH to "/<repo>/".
+const base = process.env.BASE_PATH ?? "/";
+
+// Serves manifest.json in dev and writes it into the build output, so there is
+// one source for both.
+function manifestPlugin(): Plugin {
+  const json = `${JSON.stringify(buildManifest(base), null, 2)}\n`;
+  return {
+    name: "owlbear-manifest",
+    configureServer(server) {
+      server.middlewares.use("/manifest.json", (_req, res) => {
+        res.setHeader("Content-Type", "application/json");
+        res.end(json);
+      });
+    },
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: "manifest.json", source: json });
+    },
+  };
+}
+
 export default defineConfig({
-  base: "./",
+  base,
+  plugins: [manifestPlugin()],
   server: {
     port: 5173,
     // Owlbear fetches manifest.json from another origin, so allow it.
