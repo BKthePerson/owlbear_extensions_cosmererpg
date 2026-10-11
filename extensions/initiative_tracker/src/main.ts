@@ -3,6 +3,7 @@ import {
   ACTIONS,
   LANES,
   addCombatant,
+  addPlayerCombatants,
   canGoBack,
   deadCombatants,
   emptyTracker,
@@ -319,10 +320,33 @@ function render(): void {
   nextBtn.textContent = NEXT_LABEL[action ?? "start"];
 
   byId("add-form").hidden = !isGM() || !sceneReady;
+  const missing = playersWithoutPC().length;
+  const quickAdd = byId<HTMLButtonElement>("quick-add");
+  quickAdd.disabled = missing === 0;
+  quickAdd.textContent = missing === 0 ? "Add all players" : `Add all players (${missing})`;
+  quickAdd.title =
+    missing === 0 ? "Every player in the room already has a PC" : "Add a PC for each player in the room who has none";
   renderLanes();
 }
 
+// Players in the room who do not yet own any combatant.
+const playersWithoutPC = (): PartyPlayer[] =>
+  partyPlayers.filter((p) => !tracker.combatants.some((c) => c.ownerId === p.id));
+
 function wireControls(): void {
+  byId("quick-add").addEventListener("click", () => {
+    if (!isGM()) return;
+    void write(
+      addPlayerCombatants(
+        tracker,
+        playersWithoutPC().map((p) => ({
+          combatantId: crypto.randomUUID(),
+          playerId: p.id,
+          playerName: p.name,
+        })),
+      ),
+    );
+  });
   byId("back-btn").addEventListener("click", () => {
     if (isGM()) void write(previous(tracker));
   });

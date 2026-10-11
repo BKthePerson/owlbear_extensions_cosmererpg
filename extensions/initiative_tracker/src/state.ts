@@ -196,6 +196,39 @@ export function addCombatant(tracker: Tracker, input: NewCombatant): Update {
   return toUpdate([combatant]);
 }
 
+export interface PlayerToAdd {
+  combatantId: string; // id for the new combatant
+  playerId: string; // Owlbear player id, saved as the owner
+  playerName: string; // used as the character name
+}
+
+// Quick-add: one PC per player who does not already own a combatant (a Dead PC
+// still counts, so nobody is added twice). The player's name is the label.
+export function addPlayerCombatants(tracker: Tracker, players: PlayerToAdd[]): Update {
+  const owners = new Set(tracker.combatants.map((c) => c.ownerId));
+  let order = tracker.combatants.reduce((max, c) => Math.max(max, c.order), 0);
+  const added: Combatant[] = [];
+  for (const player of players) {
+    if (owners.has(player.playerId)) continue;
+    owners.add(player.playerId);
+    order += 1;
+    added.push({
+      id: player.combatantId,
+      name: player.playerName || "Player",
+      side: "PC",
+      boss: false,
+      speed: "fast",
+      ownerId: player.playerId,
+      ownerName: player.playerName || null,
+      order,
+      fast: "waiting",
+      slow: "waiting",
+      status: "active",
+    });
+  }
+  return toUpdate(added);
+}
+
 export const removeCombatant = (id: string): Update => ({ [combatantKey(id)]: undefined });
 
 // New fight: drop everyone and go back to round 1, before the first band.

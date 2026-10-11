@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   META_KEY,
   addCombatant,
+  addPlayerCombatants,
   allEntries,
   combatantKey,
   emptyTracker,
@@ -242,4 +243,33 @@ test("Back does nothing before the round starts or at the first occupied band", 
   assert.deepEqual(previous(t), {});
   t = apply(t, next(t));
   assert.equal(canGoBack(t), true);
+});
+
+test("quick-add makes one PC per player, owned by that player, named after them", () => {
+  const t = build();
+  const update = addPlayerCombatants(t, [
+    { combatantId: "c1", playerId: "p1", playerName: "Sam" },
+    { combatantId: "c2", playerId: "p2", playerName: "Alex" },
+  ]);
+  const next = apply(t, update);
+  assert.deepEqual(next.combatants.map((c) => [c.name, c.ownerId, c.side, c.order]), [
+    ["Sam", "p1", "PC", 1],
+    ["Alex", "p2", "PC", 2],
+  ]);
+  assert.equal(next.combatants[0]?.ownerName, "Sam");
+});
+
+test("quick-add skips players who already own a combatant, including a dead one", () => {
+  let t = build({ id: "k", name: "Kelsier", side: "PC", boss: false, ownerId: "p1", ownerName: "Sam" });
+  t = apply(t, setStatus(t, "k", "dead"));
+  const update = addPlayerCombatants(t, [
+    { combatantId: "c1", playerId: "p1", playerName: "Sam" },
+    { combatantId: "c2", playerId: "p2", playerName: "Alex" },
+  ]);
+  const next = apply(t, update);
+  assert.deepEqual(next.combatants.map((c) => c.id).sort(), ["c2", "k"]);
+});
+
+test("quick-add with nobody to add does nothing", () => {
+  assert.deepEqual(addPlayerCombatants(build(), []), {});
 });
