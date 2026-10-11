@@ -11,5 +11,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@owlbear-rodeo/sdk": "^3.1.0"
   }
 }
