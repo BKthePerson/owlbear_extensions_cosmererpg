@@ -16,10 +16,10 @@ Feel free to report any bugs or request features using issues.
 ## Add it to Owlbear
 
 1. In Owlbear, open your profile menu, choose **Extensions**, then **Add Extension**.
-2. Paste the manifest URL: `https://bktheperson.github.io/owlbear_extensions_cosmererpg/manifest.json`
+2. Paste the manifest URL: `https://bktheperson.github.io/owlbear_extensions_cosmererpg/initiative/manifest.json`
 3. Turn the extension on in your room.
 
-Every push to `main` redeploys the site, so the extension updates for everyone. Reload Owlbear to pick up a new version.
+A push to `main` that changes an extension redeploys that extension only, and it updates for everyone who has it installed. Reload Owlbear to pick up a new version.
 
 ## Develop
 
@@ -42,14 +42,15 @@ Then add `http://localhost:5173/manifest.json` as a second extension in Owlbear.
 ## Layout
 
 ```
+site/
+  index.html          landing page at the site root (static)
+  site.css            styles for the landing page and the guides
 extensions/initiative_tracker/
   popover.html        the extension popover (processed by Vite)
   manifest.ts         builds manifest.json from the deploy path
   vite.config.ts      serves and emits the manifest, builds popover.html
   public/
-    index.html        landing page at the site root (static)
-    guide.html        player and GM guide (static)
-    site.css          styles for those two pages
+    guide.html        player and GM guide (static, uses ../site.css)
     icon.svg          toolbar icon
   src/
     state.ts          pure rules logic (no Owlbear imports)
@@ -62,11 +63,20 @@ State lives in Owlbear scene metadata, one key per combatant plus one for the ro
 
 ## Deployment
 
-`.github/workflows/deploy.yml` runs typecheck, tests and build on every push to `main`, then publishes to GitHub Pages. It sets `BASE_PATH` to `/<repo>/` so the manifest paths are correct for a project site. Owlbear rejects relative paths in a manifest, which is why the manifest is generated.
+The site is served from the `gh-pages` branch. Each part has its own folder there and its own workflow, so a push to `main` redeploys only what it changed:
 
-One-time setup: in the repo, go to Settings, Pages, and set the source to **GitHub Actions**. A free account needs a public repo.
+| Workflow | Runs when these change | Publishes to |
+| --- | --- | --- |
+| `deploy-initiative.yml` | `extensions/initiative_tracker/`, the root `package.json` or lockfile | `/<repo>/initiative/` |
+| `deploy-site.yml` | `site/` | `/<repo>/` (top-level files only) |
 
-To change the landing page, edit `extensions/initiative_tracker/public/index.html`. The popover lives at `popover.html`, so the site root is free for any page.
+The tracker's workflow runs typecheck, tests and build first, and a failure blocks the deploy. It sets `BASE_PATH` to `/<repo>/initiative/` so the manifest paths are correct. Owlbear rejects relative paths in a manifest, which is why the manifest is generated. Both workflows publish with `.github/scripts/publish.sh`, which replaces one folder on `gh-pages` and leaves the rest alone. Either can also be run by hand from the Actions tab.
+
+One-time setup: in the repo, go to Settings, Pages, set the source to **Deploy from a branch**, and pick `gh-pages` and `/ (root)`. The branch is created by the first deploy. A free account needs a public repo.
+
+To add an extension, give it a folder under `extensions/`, copy `deploy-initiative.yml` with the new paths and folder name, and link it from `site/index.html`.
+
+To change the landing page, edit `site/index.html`. The guide links to `../site.css` and back to the site root, so on the local dev server it shows unstyled.
 
 ### Changing stored data
 

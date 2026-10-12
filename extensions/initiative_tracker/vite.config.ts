@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 import { buildManifest } from "./manifest.ts";
 
-// "/" for local dev. The Pages workflow sets BASE_PATH to "/<repo>/".
+// "/" for local dev. The deploy workflow sets BASE_PATH to "/<repo>/initiative/".
 const base = process.env.BASE_PATH ?? "/";
 
 // Serves manifest.json in dev and writes it into the build output, so there is
@@ -35,8 +35,9 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    // The popover is the only page Vite processes. index.html (landing page)
-    // and guide.html are static files in public/ and are copied as they are.
+    // The popover is the only page Vite processes. guide.html is a static file
+    // in public/ and is copied as it is. The landing page lives in the repo's
+    // site/ folder and deploys on its own.
     rollupOptions: {
       input: fileURLToPath(new URL("./popover.html", import.meta.url)),
     },

@@ -1,0 +1,28 @@
+name: Deploy landing page
+
+# Publishes site/ to the root of the gh-pages branch. Extension folders on the
+# branch are left as they are.
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - .github/scripts/publish.sh
+      - .github/workflows/deploy-site.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash .github/scripts/publish.sh site .
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

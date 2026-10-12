@@ -2,8 +2,9 @@
 //
 // Owlbear rejects relative paths in a manifest, and root-absolute paths resolve
 // against the site origin. On GitHub Pages a project site lives under
-// /<repo>/, so the paths must include that prefix. `base` is that prefix
-// ("/" for local dev, "/<repo>/" for Pages).
+// /<repo>/ and this extension has its own folder there, so the paths must
+// include that prefix. `base` is that prefix ("/" for local dev,
+// "/<repo>/initiative/" for Pages).
 
 export function buildManifest(base: string) {
   const prefix = base.endsWith("/") ? base : `${base}/`;

@@ -20,15 +20,15 @@
         <li>Turn the extension on in the room. The tracker button appears in the toolbar.</li>
       </ol>
       <div class="card url">
-        <code id="manifest-url">manifest.json</code>
+        <code id="manifest-url">initiative/manifest.json</code>
         <button id="copy" type="button">Copy</button>
       </div>
 
       <h2>Learn it</h2>
-      <p><a href="guide.html">Read the GM and player guide</a></p>
+      <p><a href="initiative/guide.html">Read the GM and player guide</a></p>
 
       <script>
-        const url = new URL("manifest.json", location.href).href;
+        const url = new URL("initiative/manifest.json", location.href).href;
         document.getElementById("manifest-url").textContent = url;
         document.getElementById("copy").addEventListener("click", async (e) => {
           try { await navigator.clipboard.writeText(url); e.target.textContent = "Copied"; }
