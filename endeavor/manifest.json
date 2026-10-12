@@ -1,0 +1,14 @@
+{
+  "name": "Cosmere endeavor tracker",
+  "version": "0.1.0",
+  "manifest_version": 1,
+  "description": "Success, failure and clock tracks for Cosmere RPG endeavors",
+  "author": "Brandon Klein",
+  "action": {
+    "title": "Endeavors",
+    "icon": "/owlbear_extensions_cosmererpg/endeavor/icon.svg",
+    "popover": "/owlbear_extensions_cosmererpg/endeavor/popover.html",
+    "width": 420,
+    "height": 620
+  }
+}
