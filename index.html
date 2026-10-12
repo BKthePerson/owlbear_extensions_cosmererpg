@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cosmere initiative tracker</title>
+    <link rel="stylesheet" href="site.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Cosmere initiative tracker</h1>
+      <p class="lede">A fast and slow turn tracker for the Cosmere RPG, built as an Owlbear Rodeo extension.</p>
+
+      <p>Each round has four bands: fast PCs, fast NPCs, slow PCs, slow NPCs. Players act in any order inside their band, and the GM marks who has gone. Fast turns show two arrows for the two actions, slow turns show three.</p>
+
+      <h2>Add it to Owlbear Rodeo</h2>
+      <ol>
+        <li>In Owlbear, open your profile menu and choose <strong>Extensions</strong>.</li>
+        <li>Choose <strong>Add Extension</strong> and paste this manifest URL.</li>
+        <li>Turn the extension on in the room. The tracker button appears in the toolbar.</li>
+      </ol>
+      <div class="card url">
+        <code id="manifest-url">initiative/manifest.json</code>
+        <button id="copy" type="button">Copy</button>
+      </div>
+
+      <h2>Learn it</h2>
+      <p><a href="initiative/guide.html">Read the GM and player guide</a></p>
+
+      <script>
+        const url = new URL("initiative/manifest.json", location.href).href;
+        document.getElementById("manifest-url").textContent = url;
+        document.getElementById("copy").addEventListener("click", async (e) => {
+          try { await navigator.clipboard.writeText(url); e.target.textContent = "Copied"; }
+          catch { e.target.textContent = "Select and copy"; }
+        });
+      </script>
+    </main>
+  </body>
+</html>
