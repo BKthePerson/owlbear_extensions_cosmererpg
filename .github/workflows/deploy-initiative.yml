@@ -33,9 +33,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      - run: npm run typecheck -w initiative_tracker
+      - run: npm test -w initiative_tracker
+      - run: npm run build -w initiative_tracker
       - run: bash .github/scripts/publish.sh extensions/initiative_tracker/dist initiative
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

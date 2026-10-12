@@ -11,9 +11,10 @@
   ],
   "scripts": {
     "dev": "npm run dev -w initiative_tracker",
-    "build": "npm run build -w initiative_tracker",
-    "typecheck": "npm run typecheck -w initiative_tracker",
-    "test": "npm run test -w initiative_tracker"
+    "dev:endeavor": "npm run dev -w endeavor_tracker",
+    "build": "npm run build -w initiative_tracker -w endeavor_tracker",
+    "typecheck": "npm run typecheck -w initiative_tracker -w endeavor_tracker",
+    "test": "npm run test -w initiative_tracker -w endeavor_tracker"
   },
   "devDependencies": {
     "vite": "^8.3.4",

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "endeavor",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:endeavor"],
+      "port": 5174
+    }
+  ]
+}

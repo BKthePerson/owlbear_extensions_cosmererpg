@@ -1,0 +1,41 @@
+name: Deploy endeavor tracker
+
+# Runs only when the tracker (or something it is built from) changes, and
+# replaces only the endeavor/ folder on the gh-pages branch.
+on:
+  push:
+    branches: [main]
+    paths:
+      - extensions/endeavor_tracker/**
+      - package.json
+      - package-lock.json
+      - .github/scripts/publish.sh
+      - .github/workflows/deploy-endeavor.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-endeavor
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      # Project sites are served from /<repo>/, and the tracker has its own folder.
+      BASE_PATH: /${{ github.event.repository.name }}/endeavor/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck -w endeavor_tracker
+      - run: npm test -w endeavor_tracker
+      - run: npm run build -w endeavor_tracker
+      - run: bash .github/scripts/publish.sh extensions/endeavor_tracker/dist endeavor
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

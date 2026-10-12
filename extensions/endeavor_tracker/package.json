@@ -1,0 +1,22 @@
+{
+  "name": "endeavor_tracker",
+  "version": "1.0.0",
+  "description": "An endeavor tracker for the cosmere rpg",
+  "keywords": [
+    "cosmererpg"
+  ],
+  "license": "MIT",
+  "author": "Brandon Klein",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "test": "node --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@owlbear-rodeo/sdk": "^3.1.0"
+  }
+}

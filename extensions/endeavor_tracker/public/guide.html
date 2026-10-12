@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Endeavor tracker guide</title>
+    <link rel="stylesheet" href="../site.css" />
+  </head>
+  <body>
+    <main>
+      <p><a href="../">&larr; Back to install</a></p>
+      <h1>Endeavor tracker guide</h1>
+      <p class="lede">How the tracker works for the GM and for players.</p>
+      <nav class="toc">
+        <a href="#tracks">Tracks</a>
+        <a href="#players">For players</a>
+        <a href="#gm">For the GM</a>
+        <a href="#limits">Good to know</a>
+      </nav>
+
+      <h2 id="tracks">Tracks</h2>
+      <p>An endeavor is a name, an objective and one or more tracks. A track is a row of boxes that fills toward a threshold. There are three kinds:</p>
+      <ul>
+        <li><strong>Success</strong> (green): fills toward the endeavor's threshold.</li>
+        <li><strong>Failure</strong> (red): an optional limit on failures.</li>
+        <li><strong>Clock</strong> (yellow): the Mission ticking clock.</li>
+      </ul>
+      <p>When a failure track or clock fills, the endeavor is tagged Failed. When every success track is full, it is tagged Succeeded. The tag is only a flag. Nothing locks, and the GM decides what happens next.</p>
+
+      <h2 id="players">For players</h2>
+      <p>You see the endeavors and tracks the GM has shared, and the objectives checklist. The view is read-only. The endeavor with the purple outline and the Active tag is the one in play.</p>
+      <p>Click an endeavor's name to fold it away or open it again. That only changes your own view.</p>
+
+      <h2 id="gm">For the GM</h2>
+      <h3>Start an endeavor</h3>
+      <dl>
+        <dt>New endeavor</dt>
+        <dd>Pick a type and a difficulty. The difficulty sets the success threshold: Simple 4, Average 8, Intricate 9, Insurmountable 11. The type picks the starting tracks. Every label and threshold can be edited, and you can add or remove tracks, for example one small success track per sub-objective.</dd>
+        <dt>Objectives checklist</dt>
+        <dd>Optional lines to tick off, such as primary and secondary Mission objectives.</dd>
+        <dt>GM notes</dt>
+        <dd>Shown only in the GM view.</dd>
+      </dl>
+      <h3>Run it</h3>
+      <dl>
+        <dt>&minus;1, +1, +2</dt>
+        <dd>Every track has &minus;1 and +1. Success tracks also have +2 for a spectacular success.</dd>
+        <dt>Shown / Hidden</dt>
+        <dd>Each track has its own switch, so you can share the successes and keep the failure count to yourself. Hide on the endeavor hides the whole thing.</dd>
+        <dt>Pin</dt>
+        <dd>The pinned endeavor is the active one. It sits at the top for everyone and starts open.</dd>
+        <dt>Change log</dt>
+        <dd>The last 12 ticks and checklist changes, with who and when. Undo reverses that one change.</dd>
+        <dt>Archive and Delete</dt>
+        <dd>Archive puts an endeavor away under Archived, where it can be restored. Delete asks for a second click and cannot be undone.</dd>
+      </dl>
+
+      <h2 id="limits">Good to know</h2>
+      <ul>
+        <li>Endeavors are stored in the Owlbear room, not the scene, so they stay when you change scenes.</li>
+        <li>Hidden tracks, hidden endeavors and GM notes are hidden in the interface only. They are stored where a player using browser developer tools could read them. At the table this is the same trust as a GM screen.</li>
+        <li>Only the GM's view has controls. Owlbear does not enforce this, so it is a table convention too.</li>
+        <li>Owlbear gives a room 16 kB of storage, shared by all extensions. The GM view shows how much the tracker uses. Archived endeavors still count, so delete the ones you no longer need.</li>
+        <li>Tracks are not linked to map tokens yet.</li>
+      </ul>
+    </main>
+  </body>
+</html>

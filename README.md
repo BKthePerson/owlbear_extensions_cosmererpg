@@ -5,8 +5,9 @@ Custom [Owlbear Rodeo](https://www.owlbear.rodeo) extensions for running the Cos
 | Extension | What it does |
 | --- | --- |
 | `initiative_tracker` | Cosmere RPG Combat Turn Tracker. Handles the four bands of action (fast PC, fast NPC, slow PC, slow NPC), and has basic state tracking (action arrows, Done marks, Down and Dead). |
+| `endeavor_tracker` | Cosmere RPG endeavor tracker. Success, failure and clock tracks for Discovery, Exploration, Mission, Pursuit and Legacy endeavors, with an objectives checklist, GM notes, per-track hiding from players and a change log with undo. |
 
-The deployed site has a landing page with the manifest URL and a player and GM guide:
+The deployed site has a landing page with each manifest URL and a player and GM guide for each extension:
 https://bktheperson.github.io/owlbear_extensions_cosmererpg/
 
 ## Request features and report bugs!
@@ -16,7 +17,9 @@ Feel free to report any bugs or request features using issues.
 ## Add it to Owlbear
 
 1. In Owlbear, open your profile menu, choose **Extensions**, then **Add Extension**.
-2. Paste the manifest URL: `https://bktheperson.github.io/owlbear_extensions_cosmererpg/initiative/manifest.json`
+2. Paste the manifest URL of the extension you want:
+   - Initiative: `https://bktheperson.github.io/owlbear_extensions_cosmererpg/initiative/manifest.json`
+   - Endeavors: `https://bktheperson.github.io/owlbear_extensions_cosmererpg/endeavor/manifest.json`
 3. Turn the extension on in your room.
 
 A push to `main` that changes an extension redeploys that extension only, and it updates for everyone who has it installed. Reload Owlbear to pick up a new version.
@@ -30,14 +33,19 @@ npm install
 npm run dev
 ```
 
-Then add `http://localhost:5173/manifest.json` as a second extension in Owlbear. You can have the local and deployed copies installed together, but turn on only one per room.
+That runs the initiative tracker. `npm run dev:endeavor` runs the endeavor tracker on port 5174. Then add `http://localhost:5173/manifest.json` (or 5174) as another extension in Owlbear. You can have the local and deployed copies installed together, but turn on only one per room.
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Dev server on port 5173 with CORS enabled and a generated manifest |
-| `npm run typecheck` | Strict TypeScript check |
-| `npm test` | Unit tests for the rules logic |
-| `npm run build` | Typecheck, then build to `extensions/initiative_tracker/dist` |
+| `npm run dev` | Initiative tracker dev server on port 5173 with CORS enabled and a generated manifest |
+| `npm run dev:endeavor` | The same for the endeavor tracker, on port 5174 |
+| `npm run typecheck` | Strict TypeScript check of both extensions |
+| `npm test` | Unit tests for the rules logic of both |
+| `npm run build` | Typecheck, then build each to `extensions/<name>/dist` |
+
+Add `-w initiative_tracker` or `-w endeavor_tracker` to run a command for one extension.
+
+The endeavor tracker also opens outside Owlbear: with its dev server running, go to `http://localhost:5174/popover.html`. It runs against a stand-in room kept in that tab's local storage. Add `?role=player` for the player view.
 
 ## Layout
 
@@ -57,9 +65,15 @@ extensions/initiative_tracker/
     state.test.ts     tests for state.ts
     main.ts           Owlbear wiring and rendering
     style.css         popover styles
+extensions/endeavor_tracker/
+  (same files as above, plus)
+  src/
+    host.ts           the Owlbear calls the popover uses, and the dev stand-in
 ```
 
-State lives in Owlbear scene metadata, one key per combatant plus one for the round and band. Owlbear does not enforce permissions on metadata, so GM-only controls are hidden in the interface rather than locked.
+The initiative tracker keeps its state in Owlbear scene metadata, one key per combatant plus one for the round and band. The endeavor tracker uses room metadata, because endeavors span scenes: one key per endeavor, one for the pinned endeavor and one for the change log. Room metadata is capped at 16 kB shared by every extension, so its records are kept small.
+
+Owlbear does not enforce permissions on metadata, and every client can read all of it. So GM-only controls are hidden in the interface rather than locked, and the endeavor tracker's hidden tracks and GM notes are hidden in the interface only.
 
 ## Deployment
 
@@ -68,19 +82,20 @@ The site is served from the `gh-pages` branch. Each part has its own folder ther
 | Workflow | Runs when these change | Publishes to |
 | --- | --- | --- |
 | `deploy-initiative.yml` | `extensions/initiative_tracker/`, the root `package.json` or lockfile | `/<repo>/initiative/` |
+| `deploy-endeavor.yml` | `extensions/endeavor_tracker/`, the root `package.json` or lockfile | `/<repo>/endeavor/` |
 | `deploy-site.yml` | `site/` | `/<repo>/` (top-level files only) |
 
-The tracker's workflow runs typecheck, tests and build first, and a failure blocks the deploy. It sets `BASE_PATH` to `/<repo>/initiative/` so the manifest paths are correct. Owlbear rejects relative paths in a manifest, which is why the manifest is generated. Both workflows publish with `.github/scripts/publish.sh`, which replaces one folder on `gh-pages` and leaves the rest alone. Either can also be run by hand from the Actions tab.
+Each extension's workflow runs typecheck, tests and build for that extension only, and a failure blocks its deploy. It sets `BASE_PATH` to the extension's folder (such as `/<repo>/initiative/`) so the manifest paths are correct. Owlbear rejects relative paths in a manifest, which is why the manifest is generated. All the workflows publish with `.github/scripts/publish.sh`, which replaces one folder on `gh-pages` and leaves the rest alone. Any of them can also be run by hand from the Actions tab.
 
 One-time setup: in the repo, go to Settings, Pages, set the source to **Deploy from a branch**, and pick `gh-pages` and `/ (root)`. The branch is created by the first deploy. A free account needs a public repo.
 
-To add an extension, give it a folder under `extensions/`, copy `deploy-initiative.yml` with the new paths and folder name, and link it from `site/index.html`.
+To add an extension, give it a folder under `extensions/`, copy `deploy-initiative.yml` with the new paths and folder name, add it to the root `package.json` scripts, and link it from `site/index.html`.
 
 To change the landing page, edit `site/index.html`. The guide links to `../site.css` and back to the site root, so on the local dev server it shows unstyled.
 
 ### Changing stored data
 
-The tracker keeps its state in scene metadata, and an open popover keeps running the code it loaded. So:
+Both trackers keep their state in Owlbear metadata, and an open popover keeps running the code it loaded. So:
 
 - Only add optional fields. Never rename or retype a stored field.
 - Read stored data tolerantly: a missing or malformed field falls back to a default. Write unknown fields back untouched, so older code does not erase what a newer version added.
