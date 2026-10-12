@@ -10,7 +10,7 @@ export function buildManifest(base: string) {
   const prefix = base.endsWith("/") ? base : `${base}/`;
   return {
     name: "Cosmere initiative tracker",
-    version: "0.1.0",
+    version: "0.1.5",
     manifest_version: 1,
     description: "Fast and slow turn tracker for the Cosmere RPG",
     author: "Brandon Klein",
