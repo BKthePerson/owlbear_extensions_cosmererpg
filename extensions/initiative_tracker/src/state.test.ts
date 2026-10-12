@@ -263,8 +263,8 @@ test("Back does nothing before the round starts or at the first occupied band", 
 test("quick-add makes one PC per player, owned by that player, named after them", () => {
   const t = build();
   const update = addPlayerCombatants(t, [
-    { combatantId: "c1", playerId: "p1", playerName: "Sam" },
-    { combatantId: "c2", playerId: "p2", playerName: "Alex" },
+    { playerId: "p1", playerName: "Sam" },
+    { playerId: "p2", playerName: "Alex" },
   ]);
   const next = apply(t, update);
   assert.deepEqual(next.combatants.map((c) => [c.name, c.ownerId, c.side, c.order]), [
@@ -278,11 +278,31 @@ test("quick-add skips players who already own a combatant, including a dead one"
   let t = build({ id: "k", name: "Kelsier", side: "PC", boss: false, ownerId: "p1", ownerName: "Sam" });
   t = apply(t, setStatus(t, "k", "dead"));
   const update = addPlayerCombatants(t, [
-    { combatantId: "c1", playerId: "p1", playerName: "Sam" },
-    { combatantId: "c2", playerId: "p2", playerName: "Alex" },
+    { playerId: "p1", playerName: "Sam" },
+    { playerId: "p2", playerName: "Alex" },
   ]);
   const next = apply(t, update);
-  assert.deepEqual(next.combatants.map((c) => c.id).sort(), ["c2", "k"]);
+  assert.deepEqual(next.combatants.map((c) => c.id).sort(), ["k", "pc-p2"]);
+});
+
+test("two quick-adds from the same snapshot leave one combatant for the player", () => {
+  const t = build();
+  const players = [{ playerId: "p1", playerName: "Sam" }];
+  const first = addPlayerCombatants(t, players);
+  const second = addPlayerCombatants(t, players);
+  const result = apply(apply(t, first), second);
+  assert.equal(result.combatants.filter((c) => c.ownerId === "p1").length, 1);
+});
+
+test("combatants with equal order sort by id, so every client reads the same sequence", () => {
+  const record = (id: string) => ({ ...legacyRecord, id, name: id });
+  const ab: Metadata = { [combatantKey("a")]: record("a"), [combatantKey("b")]: record("b") };
+  const ba: Metadata = { [combatantKey("b")]: record("b"), [combatantKey("a")]: record("a") };
+  for (const metadata of [ab, ba]) {
+    const t = parseTracker(metadata);
+    assert.deepEqual(t.combatants.map((c) => c.id), ["a", "b"]);
+    assert.deepEqual(allEntries(t).map((e) => e.combatant.id), ["a", "b"]);
+  }
 });
 
 test("quick-add with nobody to add does nothing", () => {

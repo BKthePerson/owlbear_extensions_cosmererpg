@@ -132,6 +132,9 @@ function parseCombatant(value: unknown): Combatant | null {
   };
 }
 
+// Plain code-unit order, not localeCompare, so every browser sorts ids the same way.
+const compareIds = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
 export function parseTracker(metadata: Record<string, unknown>): Tracker {
   const raw = metadata[META_KEY];
   const meta = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
@@ -147,7 +150,7 @@ export function parseTracker(metadata: Record<string, unknown>): Tracker {
     const parsed = parseCombatant(value);
     if (parsed) combatants.push(parsed);
   }
-  combatants.sort((a, b) => a.order - b.order);
+  combatants.sort((a, b) => a.order - b.order || compareIds(a.id, b.id));
   const keys = Object.keys(metadata).filter((key) => key.startsWith(NS_PREFIX));
   return { round, band, combatants, keys };
 }
@@ -173,7 +176,12 @@ export function allEntries(tracker: Tracker): Entry[] {
           ]
         : [{ combatant, speed: combatant.speed }],
     );
-  return entries.sort((a, b) => bandOf(a) - bandOf(b) || a.combatant.order - b.combatant.order);
+  return entries.sort(
+    (a, b) =>
+      bandOf(a) - bandOf(b) ||
+      a.combatant.order - b.combatant.order ||
+      compareIds(a.combatant.id, b.combatant.id),
+  );
 }
 
 export const deadCombatants = (tracker: Tracker): Combatant[] =>
@@ -224,13 +232,13 @@ export function addCombatant(tracker: Tracker, input: NewCombatant): Update {
 }
 
 export interface PlayerToAdd {
-  combatantId: string; // id for the new combatant
   playerId: string; // Owlbear player id, saved as the owner
   playerName: string; // used as the character name
 }
 
 // Quick-add: one PC per player who does not already own a combatant (a Dead PC
-// still counts, so nobody is added twice). The player's name is the label.
+// still counts, so nobody is added twice). The player's name is the label. The id
+// is derived from the player, so adding the same player twice writes the same key.
 export function addPlayerCombatants(tracker: Tracker, players: PlayerToAdd[]): Update {
   const owners = new Set(tracker.combatants.map((c) => c.ownerId));
   let order = tracker.combatants.reduce((max, c) => Math.max(max, c.order), 0);
@@ -240,7 +248,7 @@ export function addPlayerCombatants(tracker: Tracker, players: PlayerToAdd[]): U
     owners.add(player.playerId);
     order += 1;
     added.push({
-      id: player.combatantId,
+      id: `pc-${player.playerId}`,
       name: player.playerName || "Player",
       side: "PC",
       boss: false,

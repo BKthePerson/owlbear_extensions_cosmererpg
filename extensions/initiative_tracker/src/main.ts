@@ -341,7 +341,6 @@ function wireControls(): void {
       addPlayerCombatants(
         tracker,
         playersWithoutPC().map((p) => ({
-          combatantId: crypto.randomUUID(),
           playerId: p.id,
           playerName: p.name,
         })),
