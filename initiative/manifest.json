@@ -1,0 +1,14 @@
+{
+  "name": "Cosmere initiative tracker",
+  "version": "0.1.0",
+  "manifest_version": 1,
+  "description": "Fast and slow turn tracker for the Cosmere RPG",
+  "author": "Brandon Klein",
+  "action": {
+    "title": "Initiative",
+    "icon": "/owlbear_extensions_cosmererpg/initiative/icon.svg",
+    "popover": "/owlbear_extensions_cosmererpg/initiative/popover.html",
+    "width": 420,
+    "height": 620
+  }
+}

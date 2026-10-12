@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cosmere initiative tracker</title>
+    <script type="module" crossorigin src="/owlbear_extensions_cosmererpg/initiative/assets/popover-BQiwPf2P.js"></script>
+    <link rel="stylesheet" crossorigin href="/owlbear_extensions_cosmererpg/initiative/assets/popover-C8ovMKDb.css">
+  </head>
+  <body>
+    <main id="app">
+      <header>
+        <h1 id="round">Round 1</h1>
+        <div id="gm-actions" class="actions" hidden>
+          <button id="back-btn" type="button" class="secondary" title="Go back one band. Done marks stay.">Back</button>
+          <button id="next-btn" type="button">Next</button>
+          <button id="clear-btn" type="button" class="secondary">Clear fight</button>
+        </div>
+      </header>
+
+      <p id="notice" class="notice" hidden></p>
+
+      <div id="lanes"></div>
+
+      <form id="add-form" hidden>
+        <h2>Add combatant</h2>
+        <div class="form-row">
+          <button id="quick-add" type="button" class="secondary">Add all players</button>
+        </div>
+        <div class="form-row">
+          <input id="add-name" type="text" placeholder="Name (blank uses the player's name)" maxlength="60" />
+          <select id="add-side" aria-label="Side">
+            <option value="PC">PC</option>
+            <option value="NPC">NPC</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <select id="add-owner" aria-label="Player who controls this PC"></select>
+          <label class="check"><input id="add-boss" type="checkbox" /> Boss</label>
+          <button type="submit">Add</button>
+        </div>
+      </form>
+      <p class="help"><a href="guide.html" target="_blank" rel="noopener">How to use this tracker</a></p>
+    </main>
+  </body>
+</html>
